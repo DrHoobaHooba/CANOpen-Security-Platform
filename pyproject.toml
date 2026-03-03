@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "canopen-security-platform"
+version = "0.1.0"
+description = "CANopen security platform skeleton"
+authors = ["CANopen Security Team"]
+packages = [
+    {include = "canopen_security_platform"}
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+python-can = "*"
+canopen = "*"
+PyYAML = "*"
+
+[tool.poetry.scripts]
+cansec = "canopen_security_platform.cli.main:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

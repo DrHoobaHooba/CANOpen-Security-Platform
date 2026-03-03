@@ -1,0 +1,102 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PyCharm
+*.iml
+.idea/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Logs
+*.log
+
+# CANopen fuzzing output files and test reports
+scan_results/
+fuzz_results/
+reports/
+*.json.bak
+crash_reports/
+
+# CANopen OD files (potentially sensitive/proprietary device data)
+od_files/
+object_dictionary/
+object_dictionaries/
+od/
+eds/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.od_cache/
+.vscode/
+
+# OS-specific
+Thumbs.db
+.DS_Store
+
+# EDS/XDD/XDC working files (keep templates in od_files/)
+*.eds.tmp
+*.xdd.tmp
+*.xdc.tmp
+
+# Reports
+reports/
