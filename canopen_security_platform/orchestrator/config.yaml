@@ -1,0 +1,116 @@
+# CANopen Security Testing Platform - Full Suite Configuration
+# =============================================================
+# Configure which test stages to run and their parameters
+
+# CAN Bus Configuration
+bus:
+  interface: "pcan"        # PCAN interface type
+  channel: "PCAN_USBBUS1"  # PCAN channel (can also be detected automatically)
+  bitrate: 250000          # CAN bus bitrate (250 kbps is CANopen default)
+
+# Test Stages - Enable/disable individual test phases
+tests:
+  passive_discovery: true     # Listen for boot-up/heartbeat frames
+  active_discovery: true      # Actively probe nodes via SDO
+  lss_discovery: true         # LSS fastscan for unconfigured nodes
+  od_load: true               # Load EDS/XDD/XDC files
+  hidden_od_scan: true        # Scan for undocumented OD indices
+  fuzz_sdo: true              # Fuzz SDO protocol
+  fuzz_pdo: true              # Fuzz PDO protocol (can disrupt production if devices are active)
+  fuzz_nmt: true              # Fuzz NMT commands
+  monitor_emcy: true          # Monitor EMCY frames during testing
+  monitor_heartbeat: true     # Monitor heartbeat changes
+
+# Discovery Parameters
+discovery:
+  passive_timeout: 10         # Seconds to listen passively
+  sdo_timeout: 2.0            # SDO request timeout in seconds
+  sdo_retry: 1                # Number of retries for failed SDO reads
+  node_range: [1, 127]        # Node ID range to scan
+  lss_timeout: 5.0            # LSS operation timeout
+
+# Object Dictionary Parameters
+object_dictionary:
+  device_descriptions_dir: "od_files"  # Folder containing EDS/XDD/XDC files
+  auto_convert_xdd: true      # Auto-convert XDD/XDC to EDS if needed
+  prefer_format: "eds"        # Preferred format: "eds", "xdd", or "xdc"
+  cache_dir: ".od_cache"      # Cache directory for parsed OD files
+
+# Hidden OD Scanner Parameters
+hidden_scanner:
+  enabled: true
+  scan_ranges:                # Index ranges to scan
+    - [0x1000, 0x1FFF]       # Device parameters
+    - [0x2000, 0x5FFF]       # Manufacturer objects
+    - [0x6000, 0x9FFF]       # Device profile objects
+  max_workers: 4              # Parallel threads for scanning
+  request_delay_ms: 10        # Delay between requests to avoid flooding
+  timeout: 1.0                # Timeout for each request
+
+# SDO Fuzzing Parameters
+fuzzing_sdo:
+  iterations: 100             # Number of fuzzing iterations per strategy
+  strategies:                 # Which mutation strategies to use
+    - "mutate_cs"
+    - "wrong_length"
+    - "overflow"
+    - "illegal_index"
+    - "read_only_write"
+    - "invalid_subindex"
+    - "data_mutation"
+  target_nodes: "discovered"  # "discovered", "all", or list like [1, 2, 3]
+  delay_between_tests_ms: 50  # Delay between fuzzing tests
+  skip_critical_objects: true # Skip known critical objects (0x1000, 0x1001, etc.)
+
+# PDO Fuzzing Parameters
+fuzzing_pdo:
+  iterations: 50
+  strategies:
+    - "corrupt_cob_id"
+    - "invalid_length"
+    - "data_mutation"
+    - "burst_flood"
+  target_nodes: "discovered"
+  delay_between_tests_ms: 100
+
+# NMT Fuzzing Parameters
+fuzzing_nmt:
+  iterations: 50
+  strategies:
+    - "invalid_cs"
+    - "wrong_node_id"
+    - "rapid_state_changes"
+  target_nodes: "discovered"
+  delay_between_tests_ms: 200
+  monitor_recovery: true      # Monitor if nodes recover after NMT fuzzing
+
+# Monitoring Parameters
+monitoring:
+  emcy_severity_threshold: "warning"  # Log EMCY at this level or higher
+  heartbeat_timeout_warning: 3.0      # Warn if heartbeat not received in N seconds
+  track_state_changes: true           # Track and log NMT state transitions
+  anomaly_detection: true             # Enable anomaly detection
+
+# Reporting Parameters
+reporting:
+  output_dir: "reports"       # Directory for generated reports
+  html_report: true           # Generate HTML report
+  json_export: true           # Export results as JSON
+  embed_logs: true            # Embed logs in HTML report
+  include_raw_frames: false   # Include raw CAN frames in report (verbose)
+  timestamp_format: "%Y%m%d_%H%M%S"
+
+# Logging Configuration
+logging:
+  level: "INFO"               # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console_output: true        # Print to console
+  file_output: true           # Write to log file
+  log_dir: "logs"
+  rich_console: true          # Use rich formatting for console output
+
+# Safety and Limits
+safety:
+  max_total_runtime_minutes: 60   # Abort if testing exceeds this duration
+  emergency_stop_on_emcy: false   # Stop all testing if EMCY received
+  node_health_check_interval: 30  # Check node health every N seconds during fuzzing
+  auto_recovery_attempts: 3       # Try to recover unresponsive nodes N times

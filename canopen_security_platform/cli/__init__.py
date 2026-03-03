@@ -1,0 +1,1 @@
+"""CLI entrypoint for canopen_security_platform."""
