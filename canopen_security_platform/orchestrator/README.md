@@ -13,7 +13,7 @@ The **Full Automation Suite** is a unified orchestrator that runs the entire CAN
 ✓ **Comprehensive Logging** - All activities logged for debugging and audit trails  
 ✓ **HTML & JSON Reports** - Automated report generation with timestamps  
 ✓ **Modular Architecture** - Each stage is independent and reusable  
-✓ **Type Hints & Documentation** - Production-ready code with full docstrings  
+✓ **Type Hints & Documentation** - Well-documented code with full docstrings  
 
 ## Test Stages
 
@@ -44,11 +44,7 @@ canopen_security_platform/
 │   └── config.yaml                     # Configuration template
 │
 ├── reporting/
-│   ├── __init__.py                     # Package initialization
-│   └── html_reporter.py                # HTML report generator (coming soon)
-│
-└── device_descriptions/                # OD file storage
-    └── README.md                       # Device descriptions guide
+│   └── __init__.py                     # Package initialization
 
 reports/                                # Output directory (created automatically)
 ├── report_TIMESTAMP.html               # HTML test report
@@ -71,7 +67,7 @@ pip install python-can canopen PyYAML pytest
 
 ```bash
 # Copy your EDS/XDD/XDC files to:
-device_descriptions/
+od_files/
 ├── motor_driver.eds
 ├── io_module.eds
 └── plc_device.xdd              # Will auto-convert to EDS if converter available
@@ -370,14 +366,14 @@ pip install PyYAML
 - Try different `channel` in config.yaml
 
 ### "No device descriptions found"
-- Create `device_descriptions/` folder in project root
+- Create `od_files/` folder in project root
 - Copy `.eds` files into it
 - Run orchestrator again
 
 ### "XDD conversion failed"
 - Install CANopen Editor: https://www.beckhoff.com/
 - Or manually convert XDD/XDC to EDS using external tool
-- Place resulting EDS in `device_descriptions/`
+- Place resulting EDS in `od_files/`
 
 ### "No nodes discovered"
 - Verify nodes are powered on and connected to CAN
@@ -474,10 +470,10 @@ To extend the orchestrator:
 ## Related Documentation
 
 - [config.yaml](./config.yaml) - Complete configuration reference
-- [device_descriptions/README.md](../device_descriptions/README.md) - Device file management
+- [../../../README.md](../../../README.md) - Project overview and CLI usage
+- [../../../QUICK_START.md](../../../QUICK_START.md) - End-to-end quick start
+- [../../../ARCHITECTURE.md](../../../ARCHITECTURE.md) - System and stage architecture
 - [../hal/bus_pcan.py](../hal/bus_pcan.py) - CAN bus interface
-- [../discovery/](../discovery/) - Discovery module documentation
-- [../fuzzing/](../fuzzing/) - Fuzzing module documentation
 - [../od/](../od/) - Object Dictionary modules
 - [../monitoring/oracle.py](../monitoring/oracle.py) - Anomaly detection
 

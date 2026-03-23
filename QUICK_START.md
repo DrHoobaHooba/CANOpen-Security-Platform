@@ -8,14 +8,14 @@
 
 1. **Install Dependencies**
 ```bash
-cd c:\Users\INSMMOR\Documents\CANOpen\CANOpen-Fuzzer
+cd c:\Users\INSMMOR\Documents\CANOpen\_git\CANOpen-Security-Platform
 pip install PyYAML python-can canopen pytest
 ```
 
 2. **Place Device Descriptions (Optional)**
 ```bash
 # Copy your EDS files to:
-device_descriptions/
+od_files/
 ```
 
 3. **Verify Installation**
@@ -200,7 +200,7 @@ sudo ip link set up vcan0
 ```
 
 ### "No device descriptions found"
-1. Create `device_descriptions/` folder in project root
+1. Create `od_files/` folder in project root
 2. Copy your `.eds` files into it
 3. Or disable `od_load` in config.yaml
 
@@ -380,23 +380,22 @@ tests:
   fuzz_nmt: false
 
 object_dictionary:
-  device_descriptions_dir: "test_devices"  # Test fixture directory
+  device_descriptions_dir: "od_files"  # OD file directory
 ```
 
 ## Next Steps
 
 1. **Test with Hardware** (if available): Connect PCAN adapter and run
 2. **Configure for Your Network**: Edit config.yaml with your parameters
-3. **Load Device Descriptions**: Copy EDS files to `device_descriptions/`
+3. **Load Device Descriptions**: Copy EDS files to `od_files/`
 4. **Run Full Suite**: Execute orchestrator and review HTML report
 5. **Integrate with CI/CD**: Add to automated testing pipeline
-6. **Enhance Reporting**: Extend HTML reporter with custom templates
+6. **Harden Defaults**: Tune safety and timeout settings for your network
 
 ## Support & Documentation
 
-- **Main Documentation**: See [orchestrator/README.md](orchestrator/README.md)
-- **Configuration Guide**: See [orchestrator/config.yaml](orchestrator/config.yaml)
-- **Device Files**: See [device_descriptions/README.md](device_descriptions/README.md)
-- **Discovery Modules**: See [discovery/README.md](discovery/README.md)
-- **Fuzzing Modules**: See [fuzzing/README.md](fuzzing/README.md)
-- **Monitoring**: See [monitoring/oracle.py](monitoring/oracle.py)
+- **Main Documentation**: See [README.md](README.md)
+- **Architecture**: See [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Orchestrator Guide**: See [ORCHESTRATOR_QUICK_GUIDE.md](ORCHESTRATOR_QUICK_GUIDE.md)
+- **Orchestrator Reference**: See [canopen_security_platform/orchestrator/README.md](canopen_security_platform/orchestrator/README.md)
+- **Configuration Guide**: See [canopen_security_platform/orchestrator/config.yaml](canopen_security_platform/orchestrator/config.yaml)
