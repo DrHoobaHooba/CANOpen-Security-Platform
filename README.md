@@ -112,7 +112,7 @@ If a file is found, it is loaded automatically (and `.xdc`/`.xdd` are converted 
 Example:
 
 ```text
-CANOpen-Fuzzer/
+CANOpen-Security-Platform/
     od_files/
         device.eds
 ```
@@ -126,7 +126,7 @@ The platform includes a complete 12-stage automated security test suite that run
 ### Running the Full Suite
 
 ```sh
-# Run with default configuration (safe, no fuzzing by default)
+# Run with default configuration from config.yaml
 python -m canopen_security_platform.orchestrator.run_full_security_suite
 
 # Run with custom configuration
@@ -145,7 +145,7 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite --confi
 | 6 | OD Loading | Load EDS/XDD/XDC device descriptions |
 | 7 | Hidden Object Scanning | Brute-force scan for undocumented OD indices |
 | 8 | SDO Fuzzing | Send 31 malformed SDO requests |
-| 9 | PDO Fuzzing | Send 137 PDO mutations (disabled by default) |
+| 9 | PDO Fuzzing | Send 137 PDO mutations |
 | 10 | NMT Fuzzing | Send 73 NMT state machine violations |
 | 11 | Monitoring Results | Collect detected anomalies and events |
 | 12 | Report Generation | Create HTML and JSON reports |
@@ -155,22 +155,16 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite --confi
 Edit `canopen_security_platform/orchestrator/config.yaml`:
 
 ```yaml
-# Enable/disable specific fuzzers
-fuzz_sdo: true         # SDO protocol fuzzing
-fuzz_pdo: false        # ⚠ PDO fuzzing (may disrupt operations)
-fuzz_nmt: true         # NMT state machine fuzzing
-fuzz_lss: false        # LSS configuration fuzzing
+tests:
+    fuzz_sdo: true
+    fuzz_pdo: true        # ⚠ can disrupt operations on active networks
+    fuzz_nmt: true
 
-# Discovery settings
-passive_timeout: 10.0  # Seconds to listen
-sdo_probe_timeout: 2.0 # Seconds per node probe
-lss_timeout: 10.0      # LSS scan timeout
+object_dictionary:
+    device_descriptions_dir: "od_files"
 
-# OD file location
-od_files_dir: od_files
-
-# Output
-reports_dir: reports
+reporting:
+    output_dir: "reports"
 ```
 
 ### Test Results
@@ -183,7 +177,7 @@ Latest verified run (2026-03-03):
 - **Mutations Sent**: 241 (39 SDO + 137 PDO + 73 NMT)
 - **OD Objects Loaded**: 45 from EDS
 - **Errors**: 0
-- **Status**: ✅ Production Ready
+- **Status**: ✅ Verified on lab hardware (research use)
 
 See [WHATS_CHANGED.md](WHATS_CHANGED.md) for detailed test results and [ORCHESTRATOR_QUICK_GUIDE.md](ORCHESTRATOR_QUICK_GUIDE.md) for advanced usage.
 
@@ -479,30 +473,27 @@ For OD-aware commands (`od-dump`, `scan-hidden`, `fuzz-sdo`, `fuzz-pdo`, `fuzz-n
 
 ## Development Roadmap
 
-### Phase 1: Complete Discovery
-- [x] Enhance passive frame classification
-- [x] Extend SDO queries (0x1008, 0x1009, 0x100A, 0x1018)
-- [x] Implement LSS binary search (skeleton)
-- [x] Timeout & retry logic
+### Current State (March 2026)
+- [x] Discovery stack complete (passive, SDO, LSS)
+- [x] OD pipeline complete (EDS load, XDD/XDC conversion hooks, hidden scan)
+- [x] Fuzzing engines available (SDO, PDO, NMT, LSS)
+- [x] Orchestrator integrated (12-stage run with JSON/HTML reporting)
+- [x] Baseline unit tests present for discovery, fuzzing, HAL, OD, monitoring
 
-### Phase 2: Flesh Out OD
-- [x] OD file caching
-- [x] Schema validation and metadata
-- [x] Hidden scanner optimization & parallelism
-- [x] JSON report output
+### Near-Term Priorities
+- [ ] Add CI coverage gate and publish coverage percentage in reports
+- [ ] Expand negative-path tests for orchestrator stage failures and recovery
+- [ ] Add configuration profiles for safer default fuzzing presets
 
-### Phase 3: Implement All Fuzzers
-- [x] SDO mutation strategies
-- [x] PDO COB-ID/mapping corruption
-- [x] NMT state violations
-- [x] LSS configuration attacks
-- [ ] Coverage tracking
+### Mid-Term Priorities
+- [ ] Add optional persistent event backend (SQLite/PostgreSQL)
+- [ ] Introduce baseline-vs-current diff reporting between runs
+- [ ] Add machine-readable risk scoring per node/device
 
-### Phase 4: Monitoring
-- [ ] Event persistence (database)
-- [x] Alert rules engine
-- [ ] Real-time dashboards
-- [ ] Security reports
+### Long-Term Goals
+- [ ] Real-time dashboard for fleet/node health and anomaly trends
+- [ ] SIEM integrations for alert forwarding
+- [ ] Extended protocol security checks (segmented/block transfer edge cases)
 
 ---
 

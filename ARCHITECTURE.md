@@ -52,7 +52,7 @@
                   │
                   ├──► STAGE 6: Object Dictionary Loading
                   │    │
-                  │    ├─ Scan device_descriptions/ folder
+                  │    ├─ Scan configured OD folder (default: od_files/)
                   │    ├─ Find .eds files
                   │    ├─ Find .xdd/.xdc files
                   │    ├─ If auto-convert enabled:

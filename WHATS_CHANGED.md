@@ -4,7 +4,7 @@
 
 ## Summary
 
-The CANopen Security Testing Platform has been **fully tested on real PCAN hardware** and is **production-ready for research and testing purposes**. This document summarizes all recent updates and verifications.
+The CANopen Security Testing Platform has been **tested on real PCAN hardware** and is **validated for research and testing workflows**. This document summarizes recent updates and verifications.
 
 **Important**: This is AI-assisted research software. Independent verification and testing required before any operational use.
 
@@ -52,7 +52,7 @@ Existing guides enhanced with latest information:
 |----------|---------|
 | `QUICK_START.md` | References to full suite |
 | `ARCHITECTURE.md` | No changes (still accurate) |
-| `README.md` | No critical updates |
+| `README.md` | Roadmap and config snippets aligned with current code |
 
 ---
 
@@ -74,7 +74,7 @@ Existing guides enhanced with latest information:
 6. ✅ **OD Loading** - Device file detection operational
 7. ✅ **Hidden OD Scanning** - Undocumented OD index detection
 8. ✅ **SDO Fuzzing** - Ready for fuzzing tests
-9. ✅ **PDO Fuzzing** - Ready (disabled by safety)
+9. ✅ **PDO Fuzzing** - Executed successfully in lab validation
 10. ✅ **NMT Fuzzing** - Ready for NMT testing
 11. ✅ **Monitoring** - Anomaly detection working
 12. ✅ **Report Generation** - HTML & JSON generation confirmed
@@ -89,13 +89,13 @@ Existing guides enhanced with latest information:
 
 ## Test Results
 
-### Final Hardware Test Run (Production-Ready)
+### Final Hardware Test Run (Lab Validation)
 ```
 Date:        2026-03-03 11:59:43
 Duration:    15.7 seconds
 Stages:      12/12 completed
 Failed:      0
-Status:      ✅ SUCCESS - PRODUCTION READY
+Status:      ✅ SUCCESS - LAB VALIDATED
 
 Discoveries:
 - Node 97: STOPPED state
@@ -137,24 +137,20 @@ reports/
 
 **No other code changes required** - All integration works with existing modules in their original form.
 
-### Documentation Added
-1. ✨ **TEST_EXECUTION_REPORT.md** (7.7 KB)
-   - Complete test results
-   - Hardware details
-   - Stage-by-stage outcomes
-   - Findings and recommendations
-
-2. ✨ **ORCHESTRATOR_QUICK_GUIDE.md** (10.3 KB)
+### Documentation Added/Updated
+1. ✨ **ORCHESTRATOR_QUICK_GUIDE.md** (10.3 KB)
    - How to run the orchestrator
    - Configuration examples
    - Troubleshooting guide
    - Advanced usage patterns
 
-3. ✨ **PROJECT_STATUS.md** (10.1 KB)
-   - Accomplishments summary
-   - Current capabilities
-   - Component status matrix
-   - Deployment checklist
+2. ✨ **QUICK_START.md**
+   - Installation and first-run workflow
+   - Troubleshooting and CI examples
+
+3. ✨ **README.md**
+   - Updated roadmap and orchestrator configuration snapshot
+   - Aligned OD folder references (`od_files/`)
 
 ---
 
@@ -170,10 +166,10 @@ reports/
 1. Read: [ARCHITECTURE.md](ARCHITECTURE.md) (20 minutes)
 2. Review: [orchestrator/README.md](canopen_security_platform/orchestrator/README.md) (30 minutes)
 3. Explore: Integration between orchestrator and module APIs
-4. Fetch: Test data from [TEST_EXECUTION_REPORT.md](TEST_EXECUTION_REPORT.md)
+4. Check: [WHATS_CHANGED.md](WHATS_CHANGED.md) for latest integration notes
 
 ### For Operations Teams
-1. Check: [PROJECT_STATUS.md](PROJECT_STATUS.md) for capabilities
+1. Check: [README.md](README.md) for current capabilities and limitations
 2. Review: [ORCHESTRATOR_QUICK_GUIDE.md](ORCHESTRATOR_QUICK_GUIDE.md) examples section
 3. Set up: Automated config.yaml for your network
 4. Schedule: Regular test runs using your platform's automation
@@ -252,7 +248,7 @@ Enable only passive discovery:
 4. ✓ Verify Node 97 discovered on your network
 
 ### Short-term (This Week)
-1. Add device EDS files to `device_descriptions/`
+1. Add device EDS files to `od_files/`
 2. Create custom config for your network
 3. Schedule automated test runs
 4. Set up report archiving
@@ -278,18 +274,14 @@ Start Here:
 └─ QUICK_START.md                    ← Getting started (10 min)
    ├─ For using the platform       → ORCHESTRATOR_QUICK_GUIDE.md
    ├─ For understanding design     → ARCHITECTURE.md
-   ├─ For complete reference       → orchestrator/README.md
-   ├─ For project status           → PROJECT_STATUS.md
-   └─ For test results             → TEST_EXECUTION_REPORT.md
-
-Navigation:
-└─ DOCUMENTATION_INDEX.md            ← Find docs by topic
+   ├─ For full reference           → canopen_security_platform/orchestrator/README.md
+   └─ For latest changes           → WHATS_CHANGED.md
 
 Reference:
-├─ README.md                         ← Project overview
+├─ README.md                         ← Project overview and roadmap
 ├─ ARCHITECTURE.md                   ← System design
-├─ orchestrator/README.md            ← Full feature ref
-└─ device_descriptions/README.md     ← Device file guide
+├─ ORCHESTRATOR_QUICK_GUIDE.md       ← Runbook and troubleshooting
+└─ canopen_security_platform/orchestrator/README.md  ← Orchestrator internals
 ```
 
 ---
@@ -344,10 +336,10 @@ Reference:
 
 ## Conclusion
 
-The CANopen Security Testing Platform is **fully operational, tested, and production-ready**. All 12 security test stages have been implemented, integrated, verified on real PCAN hardware, and optimized with proper OD utilization throughout the testing pipeline.
+The CANopen Security Testing Platform is **fully operational for research workflows**. All 12 security test stages have been implemented, integrated, verified on real PCAN hardware, and optimized with OD utilization throughout the testing pipeline.
 
 **Status:**
-- ✅ Code: Production ready
+- ✅ Code: Research-ready for controlled environments
 - ✅ Testing: Complete (all 12 stages, 171 CAN frames)
 - ✅ OD Utilization: Fully implemented and verified
 - ✅ Documentation: Comprehensive
@@ -368,5 +360,5 @@ Read [QUICK_START.md](QUICK_START.md) and run the orchestrator on your CANopen n
 ---
 
 **Last Updated:** 2026-03-03  
-**Version:** 1.0 - Production Release  
-**Status:** ✅ COMPLETE, TESTED & OPTIMIZED
+**Version:** 1.0  
+**Status:** ✅ COMPLETE, TESTED & OPTIMIZED FOR LAB USE

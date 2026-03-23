@@ -36,7 +36,7 @@ python --version
 
 ### 2. Navigate to project directory
 ```bash
-cd c:\Users\INSMMOR\Documents\CANOpen\CANOpen-Fuzzer
+cd c:\Users\INSMMOR\Documents\CANOpen\_git\CANOpen-Security-Platform
 ```
 
 ### 3. Install dependencies (one-time setup)
@@ -241,7 +241,7 @@ Discovered Nodes: [97]
 @echo off
 setlocal enabledelayedexpansion
 
-cd C:\Users\INSMMOR\Documents\CANOpen\CANOpen-Fuzzer
+cd C:\Users\INSMMOR\Documents\CANOpen\_git\CANOpen-Security-Platform
 set PYTHONIOENCODING=utf-8
 
 python -m canopen_security_platform.orchestrator.run_full_security_suite ^
@@ -256,8 +256,8 @@ REM Move reports\*.html archive\%date:~10,4%_%date:~4,2%_%date:~7,2%\
 ### Working with Device EDS Files
 
 ```bash
-# 1. Place EDS files in device_descriptions/
-copy mydevice.eds device_descriptions\
+# 1. Place EDS files in od_files/
+copy mydevice.eds od_files\
 
 # 2. Run orchestrator
 python -m canopen_security_platform.orchestrator.run_full_security_suite
@@ -316,7 +316,7 @@ For more information:
 - **Quick Start:** [QUICK_START.md](../../QUICK_START.md)
 - **Architecture:** [ARCHITECTURE.md](../../ARCHITECTURE.md)
 - **Full Feature Reference:** [README.md](README.md)
-- **Test Results:** [TEST_EXECUTION_REPORT.md](../../TEST_EXECUTION_REPORT.md)
+- **Recent Changes:** [WHATS_CHANGED.md](../../WHATS_CHANGED.md)
 
 ---
 
@@ -327,7 +327,7 @@ For more information:
 1. Check PCAN drivers are installed (PEAK PCAN-View)
 2. Verify CAN interface is connected and powered
 3. Run with `--log-level DEBUG` for more details
-4. Check `device_descriptions/` folder exists (create if needed)
+4. Check `od_files/` folder exists (create if needed)
 5. Ensure `reports/` folder is writable
 
 **Common Issues:**
@@ -338,6 +338,6 @@ For more information:
 
 ---
 
-**Status:** ✅ Production Ready  
+**Status:** ✅ Verified for lab research workflows  
 **Last Tested:** 2026-03-03  
 **Test Result:** All 12 stages pass with PCAN hardware
