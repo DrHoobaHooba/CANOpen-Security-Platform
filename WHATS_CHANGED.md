@@ -10,6 +10,14 @@ The CANopen Security Testing Platform now includes **4 new fuzzing engines** wit
 
 **Important**: This is AI-assisted research software. Independent verification and testing required before any operational use.
 
+### ✅ Fuzzing Policy Enforcement Implemented (April 3, 2026)
+- Added explicit event classification for fuzzing outcomes:
+   - `fuzz_input_sent` for expected malformed test traffic
+   - `device_anomaly_detected` for reportable device issues
+- Updated orchestrator fuzzing callbacks to classify and report these separately.
+- Updated monitoring collection and JSON export to include both categories.
+- Added Oracle tests to ensure fuzz inputs do not trigger issue alerts by default.
+
 ---
 
 ## Tier 1 Fuzzing Implementation - April 3, 2026

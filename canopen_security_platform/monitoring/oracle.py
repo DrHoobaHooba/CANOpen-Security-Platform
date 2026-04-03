@@ -94,6 +94,7 @@ class Oracle:
             "node_id": node_id,
             "error_code": code,
             "additional_data": additional.hex() if additional else "00000000",
+            "event_classification": "device_anomaly_detected" if code != 0x0000 else "device_event_observed",
         }
         
         self._record_event(event)
@@ -126,6 +127,7 @@ class Oracle:
             "node_id": node_id,
             "state": state,
             "state_name": self._nmt_state_name(state),
+            "event_classification": "device_event_observed",
         }
         
         self._record_event(event)
@@ -155,6 +157,7 @@ class Oracle:
             "node_id": node_id,
             "old_state": str(old),
             "new_state": str(new),
+            "event_classification": "device_event_observed",
         }
         
         self._record_event(event)
@@ -173,6 +176,7 @@ class Oracle:
             "type": "timeout",
             "timestamp": time.time(),
             "node_id": node_id,
+            "event_classification": "device_anomaly_detected",
         }
         
         self._record_event(event)
@@ -190,6 +194,7 @@ class Oracle:
             "type": "reboot",
             "timestamp": time.time(),
             "node_id": node_id,
+            "event_classification": "device_anomaly_detected",
         }
         
         self._record_event(event)
@@ -220,6 +225,9 @@ class Oracle:
 
     def _check_alert_rules(self, event: Dict[str, Any]) -> None:
         """Check if event triggers any alert rules."""
+        if event.get("event_classification") == "fuzz_input_sent":
+            return
+
         for rule in self.alert_rules:
             if rule.event_type == event["type"] and rule.check(event):
                 alert = {
@@ -240,6 +248,21 @@ class Oracle:
                     "Alert triggered: %s (severity=%s) on node %d",
                     rule.name, rule.severity, event.get("node_id")
                 )
+
+    def record_event(self, event: Dict[str, Any]) -> None:
+        """Record an externally generated event.
+
+        This is used by fuzzers and orchestrator callbacks to persist expected
+        fuzz inputs and device outcomes with explicit classification.
+        """
+        normalized = dict(event)
+        normalized.setdefault("timestamp", time.time())
+        normalized.setdefault("event_classification", "unclassified")
+
+        self._record_event(normalized)
+
+        if normalized.get("event_classification") == "device_anomaly_detected":
+            self._check_alert_rules(normalized)
 
     def get_node_summary(self, node_id: int) -> Dict[str, Any]:
         """Get behavior summary for a node."""
@@ -267,6 +290,10 @@ class Oracle:
 
     def export_report(self, output_path: str) -> str:
         """Export comprehensive report to JSON."""
+        classification_counts: Dict[str, int] = defaultdict(int)
+        for event in self.events:
+            classification_counts[event.get("event_classification", "unclassified")] += 1
+
         report = {
             "metadata": {
                 "start_time": self.start_time,
@@ -277,6 +304,7 @@ class Oracle:
                 "total_events": len(self.events),
                 "monitored_nodes": len(self.node_states),
                 "total_alerts": len(self.triggered_alerts),
+                "event_classification_counts": dict(classification_counts),
             },
             "node_summaries": {
                 node_id: self.get_node_summary(node_id)
