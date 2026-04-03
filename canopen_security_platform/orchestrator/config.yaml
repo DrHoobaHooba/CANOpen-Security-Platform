@@ -73,16 +73,63 @@ fuzzing_pdo:
   target_nodes: "discovered"
   delay_between_tests_ms: 100
 
-# NMT Fuzzing Parameters
+# NMT Fuzzing Parameters (includes heartbeat and guard time fuzzing)
 fuzzing_nmt:
   iterations: 50
   strategies:
     - "invalid_cs"
     - "wrong_node_id"
     - "rapid_state_changes"
+    - "heartbeat"              # NEW: Test heartbeat producer/consumer
+    - "guard_time"              # NEW: Test OD 0x100C/0x100D
   target_nodes: "discovered"
   delay_between_tests_ms: 200
   monitor_recovery: true      # Monitor if nodes recover after NMT fuzzing
+
+# EMCY Fuzzing Parameters (NEW - Tier 1)
+fuzzing_emcy:
+  enabled: true
+  iterations: 30
+  strategies:
+    - "error_code_fuzzing"
+    - "manufacturer_specific"
+    - "error_register_mutation"
+    - "rapid_burst"
+    - "state_transition"
+    - "recovery_sequence"
+  target_nodes: "discovered"
+  delay_between_tests_ms: 100
+
+# SYNC Fuzzing Parameters (NEW - Tier 1)
+fuzzing_sync:
+  enabled: true
+  iterations: 20
+  strategies:
+    - "counter_overflow"
+    - "missing_frames"
+    - "burst_flood"
+    - "jitter_timing"
+    - "out_of_order"
+    - "duplicate_counter"
+    - "backward_counter"
+    - "payload_corruption"
+    - "long_absence"
+  delay_between_tests_ms: 50
+
+# Concurrent Message Fuzzing Parameters (NEW - Tier 1)
+fuzzing_concurrent:
+  enabled: true
+  iterations: 15
+  strategies:
+    - "sdo_interleaving"
+    - "sdo_during_pdo"
+    - "nmt_during_transfer"
+    - "pdo_mapping_change"
+    - "sync_during_sdo"
+    - "broadcast_nmt"
+    - "rapid_pdo_mutations"
+  target_nodes: "discovered"
+  delay_between_tests_ms: 100
 
 # Monitoring Parameters
 monitoring:

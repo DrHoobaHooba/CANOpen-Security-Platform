@@ -43,6 +43,9 @@ from ..od.hidden_scanner import HiddenObjectScanner
 from ..fuzzing.sdo_fuzzer import SDOFuzzer
 from ..fuzzing.pdo_fuzzer import PDOFuzzer
 from ..fuzzing.nmt_fuzzer import NMTFuzzer
+from ..fuzzing.emcy_fuzzer import EMCYFuzzer
+from ..fuzzing.sync_fuzzer import SYNCFuzzer
+from ..fuzzing.concurrent_fuzzer import ConcurrentFuzzer
 from ..monitoring.oracle import Oracle
 from ..utils.logging_utils import get_logger
 
@@ -180,6 +183,9 @@ class SecurityTestSuite:
                 'fuzz_sdo': True,
                 'fuzz_pdo': False,
                 'fuzz_nmt': True,
+                'fuzz_emcy': True,         # NEW - Tier 1
+                'fuzz_sync': True,         # NEW - Tier 1
+                'fuzz_concurrent': True,   # NEW - Tier 1
                 'monitor_emcy': True,
                 'monitor_heartbeat': True,
             },
@@ -358,10 +364,22 @@ class SecurityTestSuite:
             if self.config['tests'].get('fuzz_nmt', True):
                 self._stage_nmt_fuzzing()
             
-            # Stage 11: Collect oracle results
+            # Stage 11: EMCY fuzzing (NEW - Tier 1)
+            if self.config['tests'].get('fuzz_emcy', True):
+                self._stage_emcy_fuzzing()
+            
+            # Stage 12: SYNC fuzzing (NEW - Tier 1)
+            if self.config['tests'].get('fuzz_sync', True):
+                self._stage_sync_fuzzing()
+            
+            # Stage 13: Concurrent message fuzzing (NEW - Tier 1)
+            if self.config['tests'].get('fuzz_concurrent', True):
+                self._stage_concurrent_fuzzing()
+            
+            # Stage 14: Collect oracle results
             self._stage_collect_oracle_results()
             
-            # Stage 12: Generate reports
+            # Stage 15: Generate reports
             self._stage_generate_reports()
             
         except KeyboardInterrupt:
@@ -926,6 +944,187 @@ class SecurityTestSuite:
         except Exception as e:
             self.results.mark_stage_failed("NMT Fuzzing", str(e))
             logger.exception("NMT fuzzing failed")
+    
+    def _stage_emcy_fuzzing(self) -> None:
+        """Stage 11: EMCY (Emergency) message fuzzing (NEW - Tier 1)."""
+        self._print_stage_header("STAGE 11: EMCY Fuzzing", "Testing emergency message handling")
+        
+        if not hasattr(self, 'emcy_results'):
+            self.emcy_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_emcy', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  EMCY fuzzing disabled in config")
+                return
+            
+            iterations = fuzz_config.get('iterations', 30)
+            target_nodes = self._get_fuzzing_targets('fuzzing_emcy')
+            
+            if not target_nodes:
+                print("⚠  No nodes to fuzz, skipping")
+                return
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print()
+            
+            anomalies = []
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                anomalies.append(event)
+                if self.oracle:
+                    self.oracle.record_event(event)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing EMCY for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = EMCYFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                    )
+                    
+                    fuzzer.run_all_strategies(iterations=iterations)
+                    
+                    self.emcy_results[node_id] = {
+                        'total_tests': fuzzer.fuzzed_count,
+                    }
+                    print(f"    ✓ Sent {fuzzer.fuzzed_count} EMCY messages")
+                    
+                except Exception as e:
+                    print(f"    ✗ Failed: {e}")
+                    logger.debug(f"EMCY fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ EMCY fuzzing complete: {len(anomalies)} anomalies detected")
+            self.results.mark_stage_completed("EMCY Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("EMCY Fuzzing", str(e))
+            logger.exception("EMCY fuzzing failed")
+    
+    def _stage_sync_fuzzing(self) -> None:
+        """Stage 12: SYNC message fuzzing (NEW - Tier 1)."""
+        self._print_stage_header("STAGE 12: SYNC Fuzzing", "Testing synchronization robustness")
+        
+        if not hasattr(self, 'sync_results'):
+            self.sync_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_sync', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  SYNC fuzzing disabled in config")
+                return
+            
+            iterations = fuzz_config.get('iterations', 20)
+            
+            print("⚠  WARNING: SYNC fuzzing may disrupt PD synchronization")
+            print()
+            print(f"  Running SYNC fuzzing ({iterations} iteration(s))...")
+            
+            anomalies = []
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                anomalies.append(event)
+                if self.oracle:
+                    self.oracle.record_event(event)
+            
+            try:
+                # SYNC is broadcast (no node_id specific)
+                od = RuntimeObjectDictionary()
+                
+                fuzzer = SYNCFuzzer(
+                    bus=self.bus,
+                    od=od,
+                    oracle=oracle_callback,
+                )
+                
+                fuzzer.run_all_strategies(iterations=iterations)
+                
+                self.sync_results = {
+                    'total_tests': fuzzer.fuzzed_count,
+                }
+                print(f"    ✓ Sent {fuzzer.fuzzed_count} SYNC messages")
+                
+            except Exception as e:
+                print(f"    ✗ Failed: {e}")
+                logger.debug(f"SYNC fuzzing error: {e}")
+            
+            print()
+            print(f"✓ SYNC fuzzing complete: {len(anomalies)} anomalies detected")
+            self.results.mark_stage_completed("SYNC Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("SYNC Fuzzing", str(e))
+            logger.exception("SYNC fuzzing failed")
+    
+    def _stage_concurrent_fuzzing(self) -> None:
+        """Stage 13: Concurrent message fuzzing (NEW - Tier 1)."""
+        self._print_stage_header("STAGE 13: Concurrent Fuzzing", "Testing race conditions and interleaving")
+        
+        target_nodes = self._get_fuzzing_targets('fuzzing_concurrent')
+        if not target_nodes:
+            print("⚠  No nodes to fuzz, skipping")
+            return
+        
+        if not hasattr(self, 'concurrent_results'):
+            self.concurrent_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_concurrent', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  Concurrent fuzzing disabled in config")
+                return
+            
+            iterations = fuzz_config.get('iterations', 15)
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print("⚠  WARNING: Concurrent fuzzing tests race conditions and may cause state confusion")
+            print()
+            
+            anomalies = []
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                anomalies.append(event)
+                if self.oracle:
+                    self.oracle.record_event(event)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing concurrent messages for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = ConcurrentFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                    )
+                    
+                    fuzzer.run_all_strategies(iterations=iterations)
+                    
+                    self.concurrent_results[node_id] = {
+                        'total_tests': fuzzer.fuzzed_count,
+                    }
+                    print(f"    ✓ Sent {fuzzer.fuzzed_count} concurrent messages")
+                    
+                except Exception as e:
+                    print(f"    ✗ Failed: {e}")
+                    logger.debug(f"Concurrent fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ Concurrent fuzzing complete: {len(anomalies)} anomalies detected")
+            self.results.mark_stage_completed("Concurrent Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("Concurrent Fuzzing", str(e))
+            logger.exception("Concurrent fuzzing failed")
     
     def _stage_collect_oracle_results(self) -> None:
         """Stage 11: Collect and summarize oracle monitoring results."""

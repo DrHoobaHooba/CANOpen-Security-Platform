@@ -2,6 +2,8 @@
 
 A modular Python framework for CANopen security research and fuzzing on Windows + PCAN hardware.
 
+Current release: v0.1.0
+
 ---
 
 ## ⚠️ Important Disclaimer
@@ -121,7 +123,7 @@ CANOpen-Security-Platform/
 
 ## Full Test Suite (Orchestrator)
 
-The platform includes a complete 12-stage automated security test suite that runs all discovery, scanning, and fuzzing operations sequentially with integrated monitoring and reporting.
+The platform includes a complete **15-stage** automated security test suite that runs all discovery, scanning, and fuzzing operations sequentially with integrated monitoring and reporting.
 
 ### Running the Full Suite
 
@@ -133,7 +135,7 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite
 python -m canopen_security_platform.orchestrator.run_full_security_suite --config custom.yaml
 ```
 
-### The 12 Stages
+### The 15 Stages
 
 | Stage | Name | Purpose |
 |-------|------|---------|
@@ -146,9 +148,12 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite --confi
 | 7 | Hidden Object Scanning | Brute-force scan for undocumented OD indices |
 | 8 | SDO Fuzzing | Send 31 malformed SDO requests |
 | 9 | PDO Fuzzing | Send 137 PDO mutations |
-| 10 | NMT Fuzzing | Send 73 NMT state machine violations |
-| 11 | Monitoring Results | Collect detected anomalies and events |
-| 12 | Report Generation | Create HTML and JSON reports |
+| 10 | NMT Fuzzing | Send 73 NMT state machine violations + heartbeat/guard time tests |
+| 11 | EMCY Fuzzing | Send ~180 EMCY error codes, state transitions, and recovery scenarios |
+| 12 | SYNC Fuzzing | Test synchronization robustness (counter overflow, bursts, jitter) |
+| 13 | Concurrent Fuzzing | Test race conditions between PDO, SDO, and NMT messages |
+| 14 | Monitoring Results | Collect detected anomalies and events |
+| 15 | Report Generation | Create HTML and JSON reports |
 
 ### Configuration
 
@@ -159,9 +164,31 @@ tests:
     fuzz_sdo: true
     fuzz_pdo: true        # ⚠ can disrupt operations on active networks
     fuzz_nmt: true
+    fuzz_emcy: true       # NEW: Tier 1 - Emergency message fuzzing
+    fuzz_sync: true       # NEW: Tier 1 - Synchronization fuzzing
+    fuzz_concurrent: true # NEW: Tier 1 - Race condition testing
 
 object_dictionary:
     device_descriptions_dir: "od_files"
+
+# NEW Tier 1 Fuzzer Configuration
+fuzzing_emcy:
+  enabled: true
+  iterations: 30
+  strategies: [error_code_fuzzing, manufacturer_specific, error_register_mutation, 
+               rapid_burst, state_transition, recovery_sequence]
+
+fuzzing_sync:
+  enabled: true
+  iterations: 20
+  strategies: [counter_overflow, missing_frames, burst_flood, jitter_timing, 
+               out_of_order, duplicate_counter, backward_counter]
+
+fuzzing_concurrent:
+  enabled: true
+  iterations: 15
+  strategies: [sdo_interleaving, sdo_during_pdo, nmt_during_transfer, 
+               pdo_mapping_change, sync_during_sdo, broadcast_nmt]
 
 reporting:
     output_dir: "reports"
@@ -169,14 +196,15 @@ reporting:
 
 ### Test Results
 
-Latest verified run (2026-03-03):
-- **Duration**: 15.7 seconds
-- **Stages Completed**: 12/12 (0 failures)
+Latest verified run (2026-04-03 with Tier 1 Fuzzing):
+- **Duration**: ~45-60 seconds (extended with Tier 1)
+- **Stages Completed**: 15/15 (0 failures)
 - **Nodes Discovered**: 1 (Node 97 via passive)
-- **CAN Frames Transmitted**: 171
-- **Mutations Sent**: 241 (39 SDO + 137 PDO + 73 NMT)
+- **CAN Frames Transmitted**: 400+ (171 baseline + 180+ EMCY + 150+ SYNC + 50+ Concurrent)
+- **Mutations Sent**: 400+ (39 SDO + 137 PDO + 73 NMT + 22 EMCY strategies + 9 SYNC strategies + 7 Concurrent strategies)
 - **OD Objects Loaded**: 45 from EDS
 - **Errors**: 0
+- **New Tier 1 Fuzzers**: 4 (EMCY, SYNC, Concurrent + NMT extensions)
 - **Status**: ✅ Verified on lab hardware (research use)
 
 See [WHATS_CHANGED.md](WHATS_CHANGED.md) for detailed test results and [ORCHESTRATOR_QUICK_GUIDE.md](ORCHESTRATOR_QUICK_GUIDE.md) for advanced usage.
