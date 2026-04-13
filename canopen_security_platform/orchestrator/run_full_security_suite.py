@@ -46,6 +46,8 @@ from ..fuzzing.nmt_fuzzer import NMTFuzzer
 from ..fuzzing.emcy_fuzzer import EMCYFuzzer
 from ..fuzzing.sync_fuzzer import SYNCFuzzer
 from ..fuzzing.concurrent_fuzzer import ConcurrentFuzzer
+from ..fuzzing.canid_fuzzer import CANIDFuzzer
+from ..fuzzing.timing_fuzzer import TimingFuzzer
 from ..monitoring.oracle import Oracle
 from ..utils.logging_utils import get_logger
 
@@ -403,10 +405,18 @@ class SecurityTestSuite:
             if self.config['tests'].get('fuzz_concurrent', True):
                 self._stage_concurrent_fuzzing()
             
-            # Stage 14: Collect oracle results
+            # Stage 14: CAN ID (COB-ID) fuzzing (NEW - Phase 1)
+            if self.config['tests'].get('fuzz_canid', True):
+                self._stage_canid_fuzzing()
+            
+            # Stage 15: Timing & delay attack fuzzing (NEW - Phase 1)
+            if self.config['tests'].get('fuzz_timing', True):
+                self._stage_timing_fuzzing()
+            
+            # Stage 16: Collect oracle results
             self._stage_collect_oracle_results()
             
-            # Stage 15: Generate reports
+            # Stage 17: Generate reports
             self._stage_generate_reports()
             
         except KeyboardInterrupt:
@@ -1192,9 +1202,143 @@ class SecurityTestSuite:
             self.results.mark_stage_failed("Concurrent Fuzzing", str(e))
             logger.exception("Concurrent fuzzing failed")
     
+    def _stage_canid_fuzzing(self) -> None:
+        """Stage 14: CAN ID (COB-ID) fuzzing (NEW - Phase 1)."""
+        self._print_stage_header("STAGE 14: CAN ID Fuzzing", "Testing COB-ID boundary conditions and reserved values")
+        
+        target_nodes = self._get_fuzzing_targets('fuzzing_canid')
+        if not target_nodes:
+            print("⚠  No nodes to fuzz, skipping")
+            return
+        
+        if not hasattr(self, 'canid_results'):
+            self.canid_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_canid', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  CAN ID fuzzing disabled in config")
+                return
+            
+            delay_ms = fuzz_config.get('delay_between_tests_ms', 25)
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print("Testing COB-ID boundaries, reserved ranges, and conflicting IDs...")
+            print()
+            
+            fuzz_inputs: List[Dict[str, Any]] = []
+            device_anomalies: List[Dict[str, Any]] = []
+
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                normalized = self._normalize_fuzzer_event(event, "canid", None)
+                fuzz_inputs.append(normalized)
+                if self._is_device_anomaly(normalized):
+                    device_anomalies.append(normalized)
+                if self.oracle:
+                    self.oracle.record_event(normalized)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing CAN IDs for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = CANIDFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                    )
+                    fuzzer.execute()
+                    
+                    self.canid_results[node_id] = {
+                        "fuzzed_count": fuzzer.fuzzed_count,
+                        "test_results": fuzzer.test_results,
+                    }
+                    
+                    time.sleep(delay_ms / 1000.0)
+                    
+                except Exception as e:
+                    logger.debug(f"CAN ID fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ CAN ID fuzzing complete: {len(fuzz_inputs)} fuzz inputs, {len(device_anomalies)} device anomalies")
+            self.results.mark_stage_completed("CAN ID Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("CAN ID Fuzzing", str(e))
+            logger.exception("CAN ID fuzzing failed")
+    
+    def _stage_timing_fuzzing(self) -> None:
+        """Stage 15: Timing & delay attack fuzzing (NEW - Phase 1)."""
+        self._print_stage_header("STAGE 15: Timing & Delay Attack Fuzzing", "Testing inter-frame gaps, jitter, and clock drift")
+        
+        target_nodes = self._get_fuzzing_targets('fuzzing_timing')
+        if not target_nodes:
+            print("⚠  No nodes to fuzz, skipping")
+            return
+        
+        if not hasattr(self, 'timing_results'):
+            self.timing_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_timing', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  Timing fuzzing disabled in config")
+                return
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print("Testing timing anomalies: jitter, gaps, drift, and synchronization violations...")
+            print()
+            
+            fuzz_inputs: List[Dict[str, Any]] = []
+            device_anomalies: List[Dict[str, Any]] = []
+
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                normalized = self._normalize_fuzzer_event(event, "timing", None)
+                fuzz_inputs.append(normalized)
+                if self._is_device_anomaly(normalized):
+                    device_anomalies.append(normalized)
+                if self.oracle:
+                    self.oracle.record_event(normalized)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing timing for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = TimingFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                    )
+                    fuzzer.execute()
+                    
+                    self.timing_results[node_id] = {
+                        "fuzzed_count": fuzzer.fuzzed_count,
+                        "test_results": fuzzer.test_results,
+                    }
+                    
+                except Exception as e:
+                    logger.debug(f"Timing fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ Timing fuzzing complete: {len(fuzz_inputs)} fuzz inputs, {len(device_anomalies)} device anomalies")
+            self.results.mark_stage_completed("Timing Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("Timing Fuzzing", str(e))
+            logger.exception("Timing fuzzing failed")
+    
     def _stage_collect_oracle_results(self) -> None:
-        """Stage 11: Collect and summarize oracle monitoring results."""
-        self._print_stage_header("STAGE 11: Monitoring Results", "Collecting EMCY, heartbeat, and anomaly data")
+        """Stage 16: Collect and summarize oracle monitoring results."""
+        self._print_stage_header("STAGE 16: Monitoring Results", "Collecting EMCY, heartbeat, and anomaly data")
         
         if not self.oracle:
             print("⚠  Oracle not initialized, skipping")
@@ -1249,8 +1393,8 @@ class SecurityTestSuite:
             logger.exception("Failed to collect oracle results")
     
     def _stage_generate_reports(self) -> None:
-        """Stage 12: Generate HTML and JSON reports."""
-        self._print_stage_header("STAGE 12: Report Generation", "Creating comprehensive test reports")
+        """Stage 17: Generate HTML and JSON reports."""
+        self._print_stage_header("STAGE 17: Report Generation", "Creating comprehensive test reports")
         
         try:
             report_config = self.config.get('reporting', {})

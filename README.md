@@ -2,7 +2,7 @@
 
 A modular Python framework for CANopen security research and fuzzing on Windows + PCAN hardware.
 
-Current release: v0.1.0
+Current release: v0.2.0
 
 ---
 
@@ -492,7 +492,7 @@ For OD-aware commands (`od-dump`, `scan-hidden`, `fuzz-sdo`, `fuzz-pdo`, `fuzz-n
 ## Implementation Status
 
 | Component | Status | Notes |
-|-----------|--------|-------|
+|-----------|-----------|-------|
 | HAL (PCAN) | ✅ Ready | Full context manager |
 | Passive Discovery | ✅ Ready | Extensive parsing, NMT & EMCY tracking |
 | SDO Probe | ✅ Ready | Retries, identity queries, stats |
@@ -501,36 +501,97 @@ For OD-aware commands (`od-dump`, `scan-hidden`, `fuzz-sdo`, `fuzz-pdo`, `fuzz-n
 | OD Runtime | ✅ Ready | Live syncing & modification log |
 | Hidden Scanner | ✅ Ready | Parallel scan & JSON reporting |
 | **SDO/PDO/NMT/LSS Fuzzers** | ✅ Ready | Full fuzzing suite with OD utilization |
+| **EMCY/SYNC/Concurrent Fuzzers** | ✅ Ready | Tier 1 - 22 strategies (v0.1.0) |
+| **CAN ID Fuzzer** | ✅ Ready | 10 COB-ID mutation strategies (v0.2.0) |
+| **Timing Attack Fuzzer** | ✅ Ready | 12 timing/delay attack strategies (v0.2.0) |
 | Oracle | ✅ Ready | Persistence & alert rules added |
 | Event Handlers | ✅ Ready | Async CAN callbacks integrated |
-| **Orchestrator** | ✅ Ready | 12-stage automated test suite |
+| **Orchestrator** | ✅ Ready | 17-stage automated test suite (v0.2.0) |
 | CLI | ✅ Ready | All commands implemented |
 
 ---
 
 ## Development Roadmap
 
-### Current State (March 2026)
+### Current State (April 2026 - v0.2.0)
 - [x] Discovery stack complete (passive, SDO, LSS)
 - [x] OD pipeline complete (EDS load, XDD/XDC conversion hooks, hidden scan)
-- [x] Fuzzing engines available (SDO, PDO, NMT, LSS)
-- [x] Orchestrator integrated (12-stage run with JSON/HTML reporting)
-- [x] Baseline unit tests present for discovery, fuzzing, HAL, OD, monitoring
+- [x] Fuzzing engines available: SDO, PDO, NMT, LSS, EMCY, SYNC, Concurrent (v0.1.0)
+- [x] **CAN ID Fuzzer** (10 strategies) — COB-ID boundary, reserved, conflict testing (v0.2.0)
+- [x] **Timing Attack Fuzzer** (12 strategies) — jitter, gaps, drift, burst attacks (v0.2.0)
+- [x] Orchestrator integrated (17-stage automated test suite)
+- [x] Extreme in-depth config profile (`config_extreme_indepth.yaml`)
+- [x] Unit tests present for all fuzzing modules (9 fuzzers covered)
 
-### Near-Term Priorities
-- [ ] Add CI coverage gate and publish coverage percentage in reports
-- [ ] Expand negative-path tests for orchestrator stage failures and recovery
-- [ ] Add configuration profiles for safer default fuzzing presets
+### Near-Term Priorities - **Offensive & Robustness Testing Focus** 🔴
+**Focus**: Expand fuzzing variants, test case coverage, and attack vectors
 
-### Mid-Term Priorities
-- [ ] Add optional persistent event backend (SQLite/PostgreSQL)
-- [ ] Introduce baseline-vs-current diff reporting between runs
-- [ ] Add machine-readable risk scoring per node/device
+- [ ] **Fuzzing Variants Expansion**
+  - CAN ID fuzzing (COB-ID boundary testing, reserved ID handling)
+  - Timing/delay attack fuzzing (inter-frame gap manipulation, jitter extremes)
+  - Resource exhaustion variants (sequential message storms, buffer overflow patterns)
+  - State machine escape sequences (transition violations per CANopen state diagram)
+  - Protocol boundary fuzz variants (min/max payload sizes, DLC edge cases)
+  - Cross-protocol interaction fuzzing (NMT during PDO, SDO during SYNC, etc.)
 
-### Long-Term Goals
-- [ ] Real-time dashboard for fleet/node health and anomaly trends
-- [ ] SIEM integrations for alert forwarding
-- [ ] Extended protocol security checks (segmented/block transfer edge cases)
+- [ ] **Test Case Expansion**
+  - Negative test case library (malformed frames, protocol violations, spec deviations)
+  - CANopen standard compliance test suites (DS301/402 coverage expansion)
+  - Device-specific test profiles (manufacturer-specific behavior detection)
+  - Stress test scenarios (sustained high-rate messaging, rapid resets, recovery cycles)
+  - Recovery/resilience testing (node behavior after device resets/timeouts)
+
+- [ ] **Enhanced Fuzzing Configurations**
+  - Extreme in-depth testing profile (created: `config_extreme_indepth.yaml`)
+  - Targeted fuzzing presets (per-protocol, per-vulnerability-class)
+  - Mutation corpus optimization (learn from prior runs)
+
+### Mid-Term Priorities - **Analysis & Advanced Attack Vectors** ⚡
+**Focus**: Vulnerability analysis, advanced fuzzing strategies, and trend analysis
+
+- [ ] **Vulnerability Analysis & Scoring**
+  - Correlation of fuzzing results across protocol layers
+  - Vulnerability clustering and pattern matching
+  - Machine-readable risk scoring (CVSS-like per node/device/vulnerability)
+  - Attack vector chaining detection (multi-step exploits)
+
+- [ ] **Advanced Fuzzing Strategies**
+  - Genetic algorithm-based fuzzing (evolve effective test cases)
+  - Behavior-driven fuzzing (adapt mutations based on device responses)
+  - Differential fuzzing (compare behavior across device variants)
+  - Replay attack generation and validation
+  - Timing side-channel analysis expansion
+
+- [ ] **Baseline & Trending**
+  - Baseline-vs-current diff reporting between runs
+  - Regression detection (new vulnerabilities vs historical)
+  - Device firmware-specific vulnerability patterns
+  - Trend analysis and risk evolution tracking
+
+### Long-Term Priorities - **Infrastructure, Dashboards & Integration** 📊
+**Focus**: Enterprise integration, persistence, dashboards (not core offensive testing)
+
+- [ ] **Persistent Data Backend**
+  - SQLite/PostgreSQL event storage integration
+  - Historical event querying and analysis
+  - Multi-run comparison and archival
+
+- [ ] **Real-time Monitoring & Dashboards**
+  - Live fleet/node health monitoring dashboard
+  - Anomaly trend visualization
+  - Real-time fuzzing progress tracking
+
+- [ ] **Enterprise Integration**
+  - SIEM integrations (Splunk, ELK, others) for alert forwarding
+  - CI/CD integration (coverage gates, automated regression testing)
+  - Report automation and scheduling
+  - Compliance automation (audit trails, generated evidence)
+
+- [ ] **Extended Protocol Coverage**
+  - Segmented/block transfer edge case testing
+  - Advanced LSS features (selective mode deep testing)
+  - Multi-master CANopen scenarios
+  - Custom/proprietary protocol extensions
 
 ---
 

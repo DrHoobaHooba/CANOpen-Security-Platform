@@ -1,14 +1,72 @@
-# Recent Updates - April 3, 2026 (v0.1.0, Tier 1 Fuzzing Implementation)
+# Recent Updates - April 13, 2026 (v0.2.0 - Offensive Testing Expansion)
 
 > **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.
 
-## Summary
+## v0.2.0 Release Notes — April 13, 2026
 
-**Major Release**: Complete **Tier 1 Fuzzing Suite** implemented (EMCY, SYNC, NMT extensions, Concurrent).
+**Release Type**: Minor Release — Offensive Testing Expansion  
+**Fuzzers**: 7 → 9 total  
+**Mutation Strategies**: 30 → 52 total  
+**Orchestrator Stages**: 15 → 17  
+**Unit Tests**: +46 new tests (100% passing)
 
-The CANopen Security Testing Platform now includes **4 new fuzzing engines** with **22 new mutation strategies**, expanding from basic SD/PDO/NMT testing to comprehensive coverage of emergency messages, synchronization, and race conditions. Platform verified on PCAN hardware with 15-stage automated security test suite.
+### ✅ New Fuzzing Engines (Phase 1)
 
-**Important**: This is AI-assisted research software. Independent verification and testing required before any operational use.
+#### 1. CAN ID Fuzzer (`canid_fuzzer.py`)
+**File**: `canopen_security_platform/fuzzing/canid_fuzzer.py`  
+**Strategies** (10 total):
+- `reserved_cob_ids` — Sends frames across all 127 reserved COB-IDs (0x001-0x07F)
+- `boundary_cob_ids` — Tests COB-ID boundaries: 0x000, 0x080, 0x180, 0x7FF
+- `conflicting_cob_ids` — Sends valid protocol data on wrong COB-IDs (NMT on PDO, etc.)
+- `cob_id_sweep` — Random sample across full 0x000-0x7FF COB-ID space
+- `broadcast_vs_unicast` — Tests broadcast message handling on unicast addresses
+- `duplicate_cob_ids` — Rapid-fire duplicate COB-ID injection (20 messages)
+- `cob_id_fuzz_mask` — Bit-flip mutations across all 11 bit positions
+- `cob_id_extension_frames` — Attempts 29-bit IDs on standard 11-bit network
+- `cob_id_mixing` — Random COB-ID injection patterns (50 frames)
+- `cob_id_rate_variation` — Same COB-ID at varying rates (1ms to 500ms)
+
+#### 2. Timing & Delay Attack Fuzzer (`timing_fuzzer.py`)
+**File**: `canopen_security_platform/fuzzing/timing_fuzzer.py`  
+**Strategies** (12 total):
+- `zero_delay_burst` — 50-message burst with no inter-frame delay
+- `extreme_jitter` — Heartbeat at ±500ms random jitter (30 iterations)
+- `interframe_gap_minimum` — 40 PDO frames at hardware minimum gap
+- `interframe_gap_maximum` — Frames spaced 5 seconds apart (timeout testing)
+- `sync_timing_drift` — SYNC messages at 6 different drift intervals
+- `heartbeat_timing_violation` — Heartbeat at non-standard intervals (100ms–5s)
+- `phase_shift_attacks` — Messages at 10 different cycle phase offsets
+- `timeout_edge_cases` — Messages arriving just before expected timeouts
+- `rapid_pdo_bursts` — 50 PDO frames in minimum time
+- `delayed_responses` — SDO responses with 100ms–5s artificial delays
+- `clock_drift_simulation` — SYNC at ±10% and ±5% clock drift factors
+- `timing_amplification` — Exponentially increasing delays (50ms → 5s)
+
+### ✅ Orchestrator Updates (v0.2.0)
+- **Stage 14: CAN ID Fuzzing** — COB-ID boundary and reserved value attack
+- **Stage 15: Timing Fuzzing** — Inter-frame timing attack suite
+- Stages 16–17 (Oracle results, Report generation) renumbered from 14–15
+- Added `fuzz_canid` and `fuzz_timing` toggles to `tests:` config block
+
+### ✅ Configuration Updates (v0.2.0)
+- `config.yaml` — Added `fuzzing_canid` and `fuzzing_timing` sections
+- `config_extreme_indepth.yaml` — Added extreme variants (300 iter / 200 iter, full strategy sets)
+- Both configs now share identical `tests:` key set (zero drift between profiles)
+
+### ✅ Unit Tests (v0.2.0)
+- `tests/test_fuzzing_canid.py` — 20 tests covering init, strategies, send, execution, result tracking
+- `tests/test_fuzzing_timing.py` — 26 tests covering init, all 12 strategies, recording, execution
+- **All 46 new tests pass**
+
+### ✅ Documentation & Planning (v0.2.0)
+- `README.md` — Roadmap reorganized for offensive-first approach
+- `FUZZING_VARIANTS.md` — Architecture for 6 planned fuzzing variants
+- `TEST_CASE_EXPANSION.md` — Negative testing and DS301/402 compliance strategy
+- `IMPLEMENTATION_PLAN.md` — 7-week sprint plan for full Phase 1-5 delivery
+
+---
+
+## Previous Updates
 
 ### ✅ Fuzzing Policy Enforcement Implemented (April 3, 2026)
 - Added explicit event classification for fuzzing outcomes:

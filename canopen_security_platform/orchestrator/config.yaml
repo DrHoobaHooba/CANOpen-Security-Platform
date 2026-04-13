@@ -18,6 +18,11 @@ tests:
   fuzz_sdo: true              # Fuzz SDO protocol
   fuzz_pdo: true              # Fuzz PDO protocol (can disrupt production if devices are active)
   fuzz_nmt: true              # Fuzz NMT commands
+  fuzz_emcy: true             # Fuzz EMCY (emergency) protocol
+  fuzz_sync: true             # Fuzz SYNC protocol
+  fuzz_concurrent: true       # Fuzz concurrent protocol interactions
+  fuzz_canid: true            # Fuzz CAN ID (COB-ID) handling (NEW - Phase 1)
+  fuzz_timing: true           # Fuzz timing and delay attacks (NEW - Phase 1)
   monitor_emcy: true          # Monitor EMCY frames during testing
   monitor_heartbeat: true     # Monitor heartbeat changes
 
@@ -130,6 +135,42 @@ fuzzing_concurrent:
     - "rapid_pdo_mutations"
   target_nodes: "discovered"
   delay_between_tests_ms: 100
+
+# CAN ID (COB-ID) Fuzzing Parameters (NEW - Phase 1)
+fuzzing_canid:
+  enabled: true
+  iterations: 50
+  strategies:
+    - "reserved_cob_ids"
+    - "boundary_cob_ids"
+    - "conflicting_cob_ids"
+    - "cob_id_sweep"
+    - "broadcast_vs_unicast"
+    - "duplicate_cob_ids"
+    - "cob_id_fuzz_mask"
+  target_nodes: "discovered"
+  delay_between_tests_ms: 25
+
+# Timing & Delay Attack Fuzzing Parameters (NEW - Phase 1)
+fuzzing_timing:
+  enabled: true
+  iterations: 50
+  strategies:
+    - "zero_delay_burst"
+    - "extreme_jitter"
+    - "interframe_gap_minimum"
+    - "interframe_gap_maximum"
+    - "sync_timing_drift"
+    - "heartbeat_timing_violation"
+    - "phase_shift_attacks"
+    - "timeout_edge_cases"
+    - "rapid_pdo_bursts"
+    - "delayed_responses"
+    - "clock_drift_simulation"
+    - "timing_amplification"
+  min_delay_ms: 0
+  max_delay_ms: 5000
+  burst_size_max: 100
 
 # Monitoring Parameters
 monitoring:

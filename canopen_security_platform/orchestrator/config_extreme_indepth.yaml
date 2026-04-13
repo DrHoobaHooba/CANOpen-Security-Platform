@@ -1,0 +1,371 @@
+# CANopen Security Testing Platform - EXTREME IN-DEPTH Configuration
+# =======================================================================================
+# Comprehensive, exhaustive testing configuration for maximum coverage and vulnerability detection
+# WARNING: This configuration runs EXTENSIVE tests and can take 2-4+ hours to complete
+# Use only for thorough security audits, not for routine testing
+
+# CAN Bus Configuration
+bus:
+  interface: "pcan"        # PCAN interface type
+  channel: "PCAN_USBBUS1"  # PCAN channel (can also be detected automatically)
+  bitrate: 250000          # CAN bus bitrate (250 kbps is CANopen default)
+
+# Test Stages - ALL ENABLED for extreme in-depth testing
+tests:
+  passive_discovery: true     # Listen for boot-up/heartbeat frames (EXTENDED)
+  active_discovery: true      # Actively probe nodes via SDO
+  lss_discovery: true         # LSS fastscan for unconfigured nodes
+  od_load: true               # Load EDS/XDD/XDC files
+  hidden_od_scan: true        # Scan for undocumented OD indices (COMPREHENSIVE)
+  fuzz_sdo: true              # Fuzz SDO protocol (INTENSIVE)
+  fuzz_pdo: true              # Fuzz PDO protocol (INTENSIVE)
+  fuzz_nmt: true              # Fuzz NMT commands (COMPREHENSIVE)
+  fuzz_emcy: true             # Fuzz EMCY protocol (INTENSIVE)
+  fuzz_sync: true             # Fuzz SYNC protocol (INTENSIVE)
+  fuzz_concurrent: true       # Concurrent message fuzzing (INTENSIVE)
+  fuzz_canid: true            # CAN ID (COB-ID) fuzzing (INTENSIVE - Phase 1)
+  fuzz_timing: true           # Timing & delay attack fuzzing (INTENSIVE - Phase 1)
+  monitor_emcy: true          # Monitor EMCY frames during testing
+  monitor_heartbeat: true     # Monitor heartbeat changes
+  monitor_state_transitions: true  # Deep state machine analysis
+
+# Discovery Parameters - EXTENDED FOR MAXIMUM COVERAGE
+discovery:
+  passive_timeout: 45         # Extended: Listen for 45 seconds (default: 10)
+  sdo_timeout: 3.0            # Extended: SDO request timeout (default: 2.0)
+  sdo_retry: 3                # Increased: Retry 3 times for SDO reads (default: 1)
+  node_range: [0, 127]        # Full range including node 0
+  lss_timeout: 10.0           # Extended: LSS operation timeout (default: 5.0)
+  lss_scan_depth: "full"      # Full scan vs fastscan
+  probe_all_subindices: true  # Probe all subindices, not just primaries
+
+# Object Dictionary Parameters - COMPREHENSIVE
+object_dictionary:
+  device_descriptions_dir: "od_files"  # Folder containing EDS/XDD/XDC files
+  auto_convert_xdd: true      # Auto-convert XDD/XDC to EDS if needed
+  prefer_format: "all"        # Load all available formats for comparison
+  cache_dir: ".od_cache"      # Cache directory for parsed OD files
+  validate_mappings: true     # Deep validation of PDO/index mappings
+  report_inconsistencies: true # Report OD inconsistencies
+  scan_undocumented: true     # Scan for undocumented entries
+
+# Hidden OD Scanner Parameters - EXTREME DEPTH
+hidden_scanner:
+  enabled: true
+  scan_ranges:                # Extended index ranges for maximum coverage
+    - [0x0000, 0x0FFF]       # Factory objects (extended)
+    - [0x1000, 0x1FFF]       # Device parameters (all)
+    - [0x2000, 0x5FFF]       # Manufacturer objects (all)
+    - [0x6000, 0x9FFF]       # Device profile objects (all)
+    - [0xA000, 0xFFFF]       # Custom ranges (extended)
+  max_workers: 8              # Parallel threads for scanning (default: 4)
+  request_delay_ms: 5         # Reduced delay for comprehensive scanning
+  timeout: 2.0                # Extended timeout for each request
+  probe_subindices: true      # Probe all subindices, not just primary
+  max_subindex_probe: 255     # Probe all 256 possible subindices
+  test_expedited_transfer: true  # Test expedited transfer protocols
+  test_block_transfer: true   # Test block transfer protocols
+
+# SDO Fuzzing Parameters - INTENSIVE
+fuzzing_sdo:
+  iterations: 500             # EXTREME: 500 iterations (default: 100)
+  strategies:                 # Comprehensive mutation strategies
+    - "mutate_cs"
+    - "mutate_ccs"
+    - "wrong_length"
+    - "overflow"
+    - "underflow"
+    - "illegal_index"
+    - "read_only_write"
+    - "write_only_read"
+    - "invalid_subindex"
+    - "data_mutation"
+    - "boundary_values"
+    - "format_violations"
+    - "expedited_errors"
+    - "segmented_errors"
+    - "abort_code_fuzzing"
+  target_nodes: "all"         # Test ALL nodes (discovered: only discovered)
+  delay_between_tests_ms: 20  # Reduced delay for comprehensive testing
+  skip_critical_objects: false # Do NOT skip - test everything
+  test_write_protection: true # Test all protection mechanisms
+  test_all_access_types: true # Test RO, WO, RW, and special access
+  concurrent_sdo_count: 3     # Test concurrent SDO transfers
+  recovery_time_ms: 100       # Wait between stress cycles
+
+# PDO Fuzzing Parameters - INTENSIVE
+fuzzing_pdo:
+  iterations: 300             # EXTREME: 300 iterations (default: 50)
+  strategies:
+    - "corrupt_cob_id"
+    - "corrupt_frame_id"
+    - "invalid_length"
+    - "invalid_transmit_type"
+    - "invalid_event_timer"
+    - "data_mutation"
+    - "burst_flood"
+    - "mapping_violations"
+    - "synchronous_errors"
+    - "timing_attacks"
+    - "reception_errors"
+  target_nodes: "all"
+  delay_between_tests_ms: 50
+  test_pdo_mapping: true      # Deep PDO mapping validation
+  test_pdo_communication: true # Test PDO communication parameters
+  test_pdo_sync: true         # Test synchronization modes
+  rapid_pdo_cycles: true      # Rapid PDO transmission cycles
+
+# NMT Fuzzing Parameters - COMPREHENSIVE
+fuzzing_nmt:
+  iterations: 200             # EXTREME: 200 iterations (default: 50)
+  strategies:
+    - "invalid_cs"
+    - "invalid_cs_all_values"
+    - "wrong_node_id"
+    - "rapid_state_changes"
+    - "state_cycle"
+    - "heartbeat_abuse"
+    - "guard_time_abuse"
+    - "producer_consumer_mismatch"
+    - "life_time_abuse"
+    - "state_machine_violations"
+    - "recovery_stress"
+  target_nodes: "all"
+  delay_between_tests_ms: 100
+  monitor_recovery: true      # Monitor if nodes recover after NMT fuzzing
+  test_all_states: true       # Cycle through all NMT states exhaustively
+  test_bootup_handling: true  # Test bootup message sequence
+  rapid_nmt_cycles: 50        # Rapid NMT state cycles
+
+# EMCY Fuzzing Parameters - INTENSIVE
+fuzzing_emcy:
+  enabled: true
+  iterations: 150             # EXTREME: 150 iterations (default: 30)
+  strategies:
+    - "error_code_fuzzing"
+    - "error_code_sequence"
+    - "manufacturer_specific"
+    - "manufacturer_field_mutation"
+    - "error_register_mutation"
+    - "additional_functions_fuzzing"
+    - "rapid_burst"
+    - "burst_sequence"
+    - "state_transition"
+    - "recovery_sequence"
+    - "recovery_timing"
+    - "error_history_overflow"
+    - "error_suppression_test"
+  target_nodes: "all"
+  delay_between_tests_ms: 50
+  test_emcy_mappings: true    # Test EMCY producer/consumer mappings
+  test_error_reset: true      # Test error reset behavior
+
+# SYNC Fuzzing Parameters - INTENSIVE
+fuzzing_sync:
+  enabled: true
+  iterations: 100             # EXTREME: 100 iterations (default: 20)
+  strategies:
+    - "counter_overflow"
+    - "counter_underflow"
+    - "missing_frames"
+    - "duplicate_frames"
+    - "burst_flood"
+    - "jitter_timing"
+    - "out_of_order"
+    - "duplicate_counter"
+    - "backward_counter"
+    - "payload_corruption"
+    - "long_absence"
+    - "rapid_sync"
+    - "sync_parameter_mutation"
+    - "reception_windows"
+  delay_between_tests_ms: 25
+  test_sync_configuration: true  # Test SYNC producer parameters
+
+# Concurrent Message Fuzzing Parameters - INTENSIVE
+fuzzing_concurrent:
+  enabled: true
+  iterations: 100             # EXTREME: 100 iterations (default: 15)
+  strategies:
+    - "sdo_interleaving"
+    - "sdo_during_pdo"
+    - "nmt_during_transfer"
+    - "pdo_mapping_change"
+    - "sync_during_sdo"
+    - "broadcast_nmt"
+    - "rapid_pdo_mutations"
+    - "simultaneous_emcy_sdo"
+    - "rapid_state_transitions"
+    - "large_data_transfer"
+    - "resource_exhaustion"
+  target_nodes: "all"
+  delay_between_tests_ms: 50
+  max_concurrent_messages: 5  # Test with up to 5 concurrent messages
+  stress_duration_seconds: 30 # Extended stress testing
+
+# CAN ID (COB-ID) Fuzzing Parameters - INTENSIVE (Phase 1)
+fuzzing_canid:
+  enabled: true
+  iterations: 300             # EXTREME: 300 iterations (default: 50)
+  strategies:
+    - "reserved_cob_ids"          # All 127 reserved COB-IDs tested
+    - "boundary_cob_ids"          # Every COB-ID boundary value
+    - "conflicting_cob_ids"       # All known protocol cross-contamination
+    - "cob_id_sweep"              # Full 0x000-0x7FF sweep
+    - "broadcast_vs_unicast"      # All node ID combinations
+    - "duplicate_cob_ids"         # Rapid duplicate injection
+    - "cob_id_fuzz_mask"          # All 11 bit positions flipped
+    - "cob_id_extension_frames"   # 29-bit ID abuse patterns
+    - "cob_id_mixing"             # Maximum random injection
+    - "cob_id_rate_variation"     # Full rate sweep per COB-ID
+  target_nodes: "all"
+  delay_between_tests_ms: 5   # Minimal delay for comprehensive coverage
+  test_all_reserved: true     # Iterate every reserved COB-ID (0x001-0x07F)
+  test_all_boundaries: true   # Iterate every boundary transition
+
+# Timing & Delay Attack Fuzzing Parameters - INTENSIVE (Phase 1)
+fuzzing_timing:
+  enabled: true
+  iterations: 200             # EXTREME: 200 iterations (default: 50)
+  strategies:
+    - "zero_delay_burst"          # Maximum burst rate
+    - "extreme_jitter"            # ±2000ms jitter range
+    - "interframe_gap_minimum"    # Hardware minimum gap
+    - "interframe_gap_maximum"    # Maximum gap (10 seconds)
+    - "sync_timing_drift"         # All drift values tested
+    - "heartbeat_timing_violation" # All invalid intervals
+    - "phase_shift_attacks"       # All 10 phase offsets
+    - "timeout_edge_cases"        # Multiple timeout windows
+    - "rapid_pdo_bursts"          # 200+ PDOs in burst
+    - "delayed_responses"         # All delay values (100ms - 10s)
+    - "clock_drift_simulation"    # Extended drift factors (0.80-1.20)
+    - "timing_amplification"      # 20 iterations (up to 5s delays)
+  min_delay_ms: 0
+  max_delay_ms: 10000         # EXTREME: 10 second max delay (default: 5000)
+  burst_size_max: 200         # EXTREME: 200 message bursts (default: 100)
+  jitter_range_ms: 2000       # EXTREME: ±2000ms jitter
+
+# LSYNC Fuzzing Parameters (if supported)
+fuzzing_lsync:
+  enabled: true
+  iterations: 80
+  strategies:
+    - "lsync_counter_fuzzing"
+    - "lsync_timing_attacks"
+    - "lsync_burst_patterns"
+
+# Monitoring Parameters - COMPREHENSIVE
+monitoring:
+  emcy_severity_threshold: "info"     # Log EMCY at INFO or higher (more verbose)
+  heartbeat_timeout_warning: 1.0      # Quick detection of heartbeat loss
+  track_state_changes: true           # Track and log NMT state transitions
+  track_nmt_states: true              # Deep NMT state tracking
+  anomaly_detection: true             # Enable anomaly detection
+  anomaly_sensitivity: "high"         # High sensitivity for detection
+  frame_rate_monitoring: true         # Monitor CAN frame rates
+  error_rate_monitoring: true         # Monitor error frame rates
+  node_statistics: true               # Collect detailed node statistics
+  protocol_violations: true           # Detect protocol violations
+  timing_analysis: true               # Analyze frame timing patterns
+  memory_tracking: true               # Track memory/resource usage
+  power_analysis: true                # Monitor power consumption patterns
+  continuous_health_check: true       # Continuous health monitoring
+
+# Stress Testing Parameters
+stress_testing:
+  enabled: true
+  duration_minutes: 30        # Extended stress test duration
+  message_rate_multiplier: 10 # 10x normal message rate
+  payload_patterns:           # Various payload patterns to test
+    - "zeros"
+    - "ones"
+    - "alternating"
+    - "incremental"
+    - "random"
+    - "boundary_values"
+  temperature_stress: false   # Simulate temperature fluctuations (device dependent)
+  power_fluctuation: false    # Simulate power fluctuations (device dependent)
+
+# Reporting Parameters - MAXIMUM DETAIL
+reporting:
+  output_dir: "reports_extreme"     # Separate directory for extreme testing
+  html_report: true                 # Generate HTML report
+  json_export: true                 # Export results as JSON
+  csv_export: true                  # Export as CSV for analysis
+  xml_export: true                  # Export as XML
+  embed_logs: true                  # Embed logs in HTML report
+  include_raw_frames: true          # Include raw CAN frames (VERBOSE)
+  include_statistics: true          # Include statistical analysis
+  include_anomalies: true           # Document all anomalies
+  include_recommendations: true     # Security recommendations
+  timestamp_format: "%Y%m%d_%H%M%S"
+  detailed_frame_dump: true         # Dump all frames to separate file
+  timeline_analysis: true           # Generate timeline visualizations
+  failure_analysis: true            # Deep analysis of failures
+  comparison_mode: true             # Compare against baseline (if available)
+  vulnerability_scoring: true       # CVSS-like scoring
+
+# Logging Configuration - MAXIMUM VERBOSITY
+logging:
+  level: "DEBUG"              # DEBUG for maximum detail (default: INFO)
+  console_output: true        # Print to console
+  file_output: true           # Write to log file
+  log_dir: "logs_extreme"
+  rich_console: true          # Use rich formatting for console output
+  log_frames: true            # Log all CAN frames
+  log_sdo_detail: true        # Log detailed SDO transactions
+  log_pdo_detail: true        # Log detailed PDO transactions
+  log_nmt_detail: true        # Log detailed NMT transactions
+  log_emcy_detail: true       # Log detailed EMCY events
+  log_errors: true            # Log all error conditions
+  log_performance: true       # Log performance metrics
+  debug_file: "debug_extreme.log"  # Separate debug log file
+
+# Safety and Limits - EXTENDED FOR EXTREME TESTING
+safety:
+  max_total_runtime_minutes: 240     # 4 hours for extreme testing (default: 60)
+  emergency_stop_on_emcy: false      # Do NOT auto-stop on EMCY
+  emergency_stop_on_error_rate: 90   # Stop if error rate exceeds 90%
+  node_health_check_interval: 10     # Frequent health checks (every 10 seconds)
+  auto_recovery_attempts: 10         # Aggressive recovery attempts
+  recovery_wait_ms: 500              # Wait longer between recovery attempts
+  critical_error_threshold: 100      # Number of critical errors before stopping
+  pre_test_validation: true          # Validate setup before starting
+  post_test_validation: true         # Validate results after testing
+  checkpoint_frequency_minutes: 5    # Save checkpoint every 5 minutes
+  ability_to_pause: true             # Allow pausing for manual inspection
+  graceful_shutdown: true            # Proper cleanup on stop/error
+
+# Tier 1+ Security Analysis
+security_analysis:
+  enabled: true
+  deep_state_machine_analysis: true  # Analyze state machine coverage
+  protocol_compliance_check: true    # CANopen standard compliance
+  vulnerability_patterns: true       # Check for known vulnerability patterns
+  access_control_analysis: true      # Analyze access controls
+  privilege_escalation_test: true    # Test for privilege escalation
+  denial_of_service_test: true       # Stress test for DoS vulnerability
+  replay_attack_test: true           # Test for replay vulnerabilities
+  timing_attack_test: true           # Test for timing side-channels
+  resource_exhaustion_test: true     # Test resource limits
+
+# Performance Profiling
+performance_profiling:
+  enabled: true
+  cpu_monitoring: true
+  memory_monitoring: true
+  latency_profiling: true
+  throughput_profiling: true
+  frame_processing_time: true
+  response_time_analysis: true
+  bottleneck_identification: true
+
+# Advanced Options
+advanced:
+  enable_extended_diagnostics: true  # Enable extended diagnostic features
+  enable_custom_mutations: true      # Allow custom mutation strategies
+  enable_heuristic_learning: true    # Learn from failures and adapt
+  export_pcap: true                  # Export PCAP for Wireshark analysis
+  export_candump: true               # Export candump format logs
+  enable_fuzzing_corpus: true        # Save fuzzing corpus for later use
+  enable_differential_analysis: true # Compare multiple devices
