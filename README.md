@@ -2,7 +2,7 @@
 
 A modular Python framework for CANopen security research and fuzzing on Windows + PCAN hardware.
 
-Current release: v0.2.0
+Current release: v0.2.1
 
 ---
 
@@ -506,22 +506,24 @@ For OD-aware commands (`od-dump`, `scan-hidden`, `fuzz-sdo`, `fuzz-pdo`, `fuzz-n
 | **Timing Attack Fuzzer** | ✅ Ready | 12 timing/delay attack strategies (v0.2.0) |
 | Oracle | ✅ Ready | Persistence & alert rules added |
 | Event Handlers | ✅ Ready | Async CAN callbacks integrated |
-| **Orchestrator** | ✅ Ready | 17-stage automated test suite (v0.2.0) |
+| **Orchestrator** | ✅ Ready | 17-stage automated test suite, auto bitrate detection (v0.2.1) |
 | CLI | ✅ Ready | All commands implemented |
 
 ---
 
 ## Development Roadmap
 
-### Current State (April 2026 - v0.2.0)
+### Current State (April 2026 - v0.2.1)
 - [x] Discovery stack complete (passive, SDO, LSS)
 - [x] OD pipeline complete (EDS load, XDD/XDC conversion hooks, hidden scan)
 - [x] Fuzzing engines available: SDO, PDO, NMT, LSS, EMCY, SYNC, Concurrent (v0.1.0)
 - [x] **CAN ID Fuzzer** (10 strategies) — COB-ID boundary, reserved, conflict testing (v0.2.0)
 - [x] **Timing Attack Fuzzer** (12 strategies) — jitter, gaps, drift, burst attacks (v0.2.0)
+- [x] **Auto bitrate detection** — probes 250k/125k/500k/1M/50k/20k/10k on PCAN_USBBUS1 (v0.2.1)
 - [x] Orchestrator integrated (17-stage automated test suite)
 - [x] Extreme in-depth config profile (`config_extreme_indepth.yaml`)
 - [x] Unit tests present for all fuzzing modules (9 fuzzers covered)
+- [x] Full 17-stage suite validated on physical PCAN device (April 13, 2026)
 
 ### Near-Term Priorities - **Offensive & Robustness Testing Focus** 🔴
 **Focus**: Expand fuzzing variants, test case coverage, and attack vectors

@@ -1,6 +1,28 @@
-# Recent Updates - April 13, 2026 (v0.2.0 - Offensive Testing Expansion)
+# Recent Updates - April 13, 2026 (v0.2.1 - Auto Bitrate Detection)
 
 > **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.
+
+## v0.2.1 Release Notes — April 13, 2026
+
+**Release Type**: Patch — Hardware Usability  
+**New Feature**: Automatic CAN bus bitrate detection  
+**Validated**: Full 17-stage suite run against physical PCAN device (zero stage failures)
+
+### ✅ Auto Bitrate Detection
+
+The orchestrator Stage 1 (PCAN Connection) now supports automatic bitrate detection.  
+Setting `bitrate: auto` in `config.yaml` (now the default) will probe common CANopen bitrates in order — 250k, 125k, 500k, 1M, 50k, 20k, 10k — and lock on to the first rate that receives valid CAN traffic.
+
+**Files changed:**
+- `canopen_security_platform/orchestrator/run_full_security_suite.py` — added `_autodetect_bitrate()` helper and updated `_stage_connect_pcan()` to invoke it when `bitrate: auto`
+- `canopen_security_platform/orchestrator/config.yaml` — changed `bitrate` default from `250000` to `auto`
+
+**Behaviour:**
+- `bitrate: auto` in config → probes rates, prints detection results to console, proceeds with first match
+- Explicit value e.g. `bitrate: 250000` → behaves exactly as before (no probing)
+- If no rate is detected → stage fails with a clear diagnostic message rather than a cryptic driver error
+
+---
 
 ## v0.2.0 Release Notes — April 13, 2026
 

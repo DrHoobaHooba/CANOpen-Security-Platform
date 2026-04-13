@@ -6,7 +6,7 @@
 bus:
   interface: "pcan"        # PCAN interface type
   channel: "PCAN_USBBUS1"  # PCAN channel (can also be detected automatically)
-  bitrate: 250000          # CAN bus bitrate (250 kbps is CANopen default)
+  bitrate: auto            # "auto" probes 250k/125k/500k/1M until traffic detected; or set explicitly e.g. 250000
 
 # Test Stages - Enable/disable individual test phases
 tests:

@@ -433,43 +433,123 @@ class SecurityTestSuite:
         
         return self.results
     
+    # Common CANopen bitrates to probe during auto-detection (most common first)
+    _AUTODETECT_BITRATES = [250000, 125000, 500000, 1000000, 50000, 20000, 10000]
+
+    def _autodetect_bitrate(self, interface: str, channel: str) -> Optional[int]:
+        """Probe common CANopen bitrates and return the first one that receives frames.
+
+        Tries each rate in _AUTODETECT_BITRATES order, connects for 1.5 seconds,
+        and accepts the first rate that produces valid CAN traffic (or no bus-off errors).
+
+        Args:
+            interface: python-can interface name (e.g. 'pcan')
+            channel: hardware channel (e.g. 'PCAN_USBBUS1')
+
+        Returns:
+            Detected bitrate in bps, or None if detection failed.
+        """
+        import can as _can
+
+        print("  Auto-detecting bitrate — probing common CANopen rates...")
+
+        for rate in self._AUTODETECT_BITRATES:
+            raw_bus = None
+            try:
+                print(f"    Trying {rate} bps ... ", end="", flush=True)
+                raw_bus = _can.Bus(interface=interface, channel=channel, bitrate=rate)
+
+                # Listen for up to 1.5 seconds for any valid frame
+                deadline = time.time() + 1.5
+                detected = False
+                while time.time() < deadline:
+                    msg = raw_bus.recv(timeout=0.2)
+                    if msg is not None:
+                        detected = True
+                        break
+
+                    # Treat bus-off state as wrong bitrate
+                    try:
+                        state = raw_bus.state
+                        if state in (
+                            _can.BusState.ERROR_PASSIVE,
+                            getattr(_can.BusState, "OFF", None),
+                            getattr(_can.BusState, "BUS_OFF", None),
+                        ):
+                            break
+                    except Exception:
+                        pass
+
+                if detected:
+                    print(f"✓ frame received — using {rate} bps")
+                    return rate
+                else:
+                    print("no traffic")
+
+            except Exception as e:
+                print(f"error ({e})")
+            finally:
+                try:
+                    if raw_bus is not None:
+                        raw_bus.shutdown()
+                except Exception:
+                    pass
+
+        return None
+
     def _stage_connect_pcan(self) -> bool:
         """Stage 1: Connect to PCAN interface.
-        
+
+        Supports automatic bitrate detection when config bitrate is set to "auto".
+
         Returns:
             True if connection successful, False otherwise
         """
         self._print_stage_header("STAGE 1: PCAN Bus Connection", "Establishing connection to CAN bus")
-        
+
         try:
             bus_config = self.config.get('bus', {})
             interface = bus_config.get('interface', 'pcan')
             channel = bus_config.get('channel', 'PCAN_USBBUS1')
-            bitrate = bus_config.get('bitrate', 250000)
-            
-            print(f"Interface: {interface}")
-            print(f"Channel: {channel}")
-            print(f"Bitrate: {bitrate} bps")
+            bitrate_cfg = bus_config.get('bitrate', 250000)
+
+            print(f"Interface : {interface}")
+            print(f"Channel   : {channel}")
+
+            # Auto-detect bitrate when configured as "auto"
+            if str(bitrate_cfg).lower() == "auto":
+                bitrate = self._autodetect_bitrate(interface, channel)
+                if bitrate is None:
+                    print("✗ Bitrate auto-detection failed — no CAN traffic detected on any standard rate.")
+                    print("  Connect your device and ensure it is powered on, or set bitrate explicitly in config.yaml")
+                    self.results.mark_stage_failed("PCAN Connection", "Auto-detection failed")
+                    return False
+            else:
+                bitrate = int(bitrate_cfg)
+                print(f"Bitrate   : {bitrate} bps")
+
             print()
-            
+
             self.bus = BusInterface(config={
                 "interface": interface,
                 "channel": channel,
                 "bitrate": bitrate,
             })
-            
-            # Test connection
+
+            # Store detected/used bitrate back so downstream stages can reference it
+            self.config['bus']['bitrate'] = bitrate
+
             stats = self.bus.get_statistics()
             print(f"✓ Bus connected successfully")
             print(f"  Status: Open={stats['is_open']}, TX={stats['frames_transmitted']}, RX={stats['frames_received']}")
-            
+
             # Initialize canopen network with the underlying python-can Bus
             self.network = canopen.Network()
             self.network.bus = self.bus.get_raw_bus()
-            
+
             self.results.mark_stage_completed("PCAN Connection")
             return True
-            
+
         except CANConfigError as e:
             self.results.mark_stage_failed("PCAN Connection", str(e))
             print(f"✗ Failed to connect to PCAN: {e}")
