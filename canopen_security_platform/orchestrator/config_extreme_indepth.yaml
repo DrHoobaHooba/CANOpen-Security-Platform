@@ -245,6 +245,48 @@ fuzzing_timing:
   burst_size_max: 200         # EXTREME: 200 message bursts (default: 100)
   jitter_range_ms: 2000       # EXTREME: ±2000ms jitter
 
+# Resource Exhaustion Fuzzing Parameters - INTENSIVE (Phase 2)
+fuzzing_resource:
+  enabled: true
+  iterations: 300             # EXTREME: 300 iterations (default: 75)
+  strategies:
+    - "sequential_sdo_storm"
+    - "pdo_buffer_flood"
+    - "large_payload_escalation"
+    - "segmented_transfer_abuse"
+    - "concurrent_sdo_max"
+    - "heartbeat_spam"
+    - "emcy_burst"
+    - "sync_burst"
+    - "memory_leak_patterns"
+    - "stack_overflow_attempt"
+    - "buffer_wraparound"
+    - "resource_recovery_test"
+  target_nodes: "all"
+  max_concurrent: 50          # EXTREME: 50 concurrent threads (default: 10)
+  duration_seconds: 30        # EXTREME: 30 second duration (default: 5)
+  delay_between_tests_ms: 5   # EXTREME: minimal delay
+
+# State Machine Escape Sequences Fuzzing Parameters - INTENSIVE (Phase 2)
+fuzzing_state_machine:
+  enabled: true
+  iterations: 200             # EXTREME: 200 iterations (default: 50)
+  strategies:
+    - "illegal_state_transition"
+    - "guard_time_manipulation"
+    - "lifetime_factor_abuse"
+    - "bootup_during_operational"
+    - "reset_surge"
+    - "partial_state_corruption"
+    - "emergency_to_invalid"
+    - "producer_consumer_desync"
+    - "nmt_spurious_response"
+    - "state_persistence_test"
+  target_nodes: "all"
+  delay_between_tests_ms: 10  # EXTREME: 10ms delay (default: 100)
+  od_reference_checks: true
+  deep_state_validation: true
+
 # LSYNC Fuzzing Parameters (if supported)
 fuzzing_lsync:
   enabled: true

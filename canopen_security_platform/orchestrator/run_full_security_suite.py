@@ -48,6 +48,8 @@ from ..fuzzing.sync_fuzzer import SYNCFuzzer
 from ..fuzzing.concurrent_fuzzer import ConcurrentFuzzer
 from ..fuzzing.canid_fuzzer import CANIDFuzzer
 from ..fuzzing.timing_fuzzer import TimingFuzzer
+from ..fuzzing.resource_fuzzer import ResourceFuzzer
+from ..fuzzing.state_machine_fuzzer import StateMachineFuzzer
 from ..monitoring.oracle import Oracle
 from ..utils.logging_utils import get_logger
 
@@ -83,6 +85,10 @@ class TestResults:
     sdo_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     pdo_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     nmt_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    canid_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    timing_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    resource_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    state_machine_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     
     # Monitoring
     emcy_events: List[Dict[str, Any]] = field(default_factory=list)
@@ -413,10 +419,18 @@ class SecurityTestSuite:
             if self.config['tests'].get('fuzz_timing', True):
                 self._stage_timing_fuzzing()
             
-            # Stage 16: Collect oracle results
+            # Stage 16: Resource exhaustion fuzzing (NEW - Phase 2)
+            if self.config['tests'].get('fuzz_resource', True):
+                self._stage_resource_fuzzing()
+            
+            # Stage 17: State machine escape sequences (NEW - Phase 2)
+            if self.config['tests'].get('fuzz_state_machine', True):
+                self._stage_state_machine_fuzzing()
+            
+            # Stage 18: Collect oracle results
             self._stage_collect_oracle_results()
             
-            # Stage 17: Generate reports
+            # Stage 19: Generate reports
             self._stage_generate_reports()
             
         except KeyboardInterrupt:
@@ -1416,9 +1430,143 @@ class SecurityTestSuite:
             self.results.mark_stage_failed("Timing Fuzzing", str(e))
             logger.exception("Timing fuzzing failed")
     
+    def _stage_resource_fuzzing(self) -> None:
+        """Stage 16: Resource exhaustion fuzzing (NEW - Phase 2)."""
+        self._print_stage_header("STAGE 16: Resource Exhaustion Fuzzing", "Testing buffer overflow, concurrent limits, and memory stress")
+        
+        target_nodes = self._get_fuzzing_targets('fuzzing_resource')
+        if not target_nodes:
+            print("⚠  No nodes to fuzz, skipping")
+            return
+        
+        if not hasattr(self, 'resource_results'):
+            self.resource_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_resource', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  Resource fuzzing disabled in config")
+                return
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print("Testing resource exhaustion: concurrent transfers, buffer floods, and memory patterns...")
+            print()
+            
+            fuzz_inputs: List[Dict[str, Any]] = []
+            device_anomalies: List[Dict[str, Any]] = []
+
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                normalized = self._normalize_fuzzer_event(event, "resource", None)
+                fuzz_inputs.append(normalized)
+                if self._is_device_anomaly(normalized):
+                    device_anomalies.append(normalized)
+                if self.oracle:
+                    self.oracle.record_event(normalized)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing resources for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = ResourceFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                        max_concurrent=fuzz_config.get('max_concurrent', 10),
+                        duration_seconds=fuzz_config.get('duration_seconds', 5),
+                    )
+                    fuzzer.execute()
+                    
+                    self.resource_results[node_id] = {
+                        "fuzzed_count": fuzzer.fuzzed_count,
+                        "test_results": fuzzer.test_results,
+                    }
+                    self.results.resource_fuzzing_results[node_id] = self.resource_results[node_id]
+                    
+                except Exception as e:
+                    logger.debug(f"Resource fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ Resource fuzzing complete: {len(fuzz_inputs)} fuzz inputs, {len(device_anomalies)} device anomalies")
+            self.results.mark_stage_completed("Resource Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("Resource Fuzzing", str(e))
+            logger.exception("Resource fuzzing failed")
+    
+    def _stage_state_machine_fuzzing(self) -> None:
+        """Stage 17: State machine escape sequences fuzzing (NEW - Phase 2)."""
+        self._print_stage_header("STAGE 17: State Machine Escape Sequences", "Testing illegal NMT transitions and state corruption")
+        
+        target_nodes = self._get_fuzzing_targets('fuzzing_state_machine')
+        if not target_nodes:
+            print("⚠  No nodes to fuzz, skipping")
+            return
+        
+        if not hasattr(self, 'state_machine_results'):
+            self.state_machine_results = {}
+        
+        try:
+            fuzz_config = self.config.get('fuzzing_state_machine', {})
+            if not fuzz_config.get('enabled', True):
+                print("⚠  State machine fuzzing disabled in config")
+                return
+            
+            print(f"Target nodes: {sorted(target_nodes)}")
+            print("Testing state machine: illegal transitions, guard time abuse, and reset surges...")
+            print()
+            
+            fuzz_inputs: List[Dict[str, Any]] = []
+            device_anomalies: List[Dict[str, Any]] = []
+
+            def oracle_callback(event: Dict[str, Any]) -> None:
+                normalized = self._normalize_fuzzer_event(event, "state_machine", None)
+                fuzz_inputs.append(normalized)
+                if self._is_device_anomaly(normalized):
+                    device_anomalies.append(normalized)
+                if self.oracle:
+                    self.oracle.record_event(normalized)
+            
+            for node_id in sorted(target_nodes):
+                print(f"  Fuzzing state machine for node {node_id}...")
+                
+                try:
+                    od = self.results.loaded_od_objects.get(node_id)
+                    if not od:
+                        od = RuntimeObjectDictionary()
+                    
+                    fuzzer = StateMachineFuzzer(
+                        bus=self.bus,
+                        node_id=node_id,
+                        od=od,
+                        oracle=oracle_callback,
+                    )
+                    fuzzer.execute()
+                    
+                    self.state_machine_results[node_id] = {
+                        "fuzzed_count": fuzzer.fuzzed_count,
+                        "test_results": fuzzer.test_results,
+                    }
+                    self.results.state_machine_fuzzing_results[node_id] = self.state_machine_results[node_id]
+                    
+                except Exception as e:
+                    logger.debug(f"State machine fuzzing error for node {node_id}: {e}")
+            
+            print()
+            print(f"✓ State machine fuzzing complete: {len(fuzz_inputs)} fuzz inputs, {len(device_anomalies)} device anomalies")
+            self.results.mark_stage_completed("State Machine Fuzzing")
+            
+        except Exception as e:
+            self.results.mark_stage_failed("State Machine Fuzzing", str(e))
+            logger.exception("State machine fuzzing failed")
+    
     def _stage_collect_oracle_results(self) -> None:
-        """Stage 16: Collect and summarize oracle monitoring results."""
-        self._print_stage_header("STAGE 16: Monitoring Results", "Collecting EMCY, heartbeat, and anomaly data")
+        """Stage 18: Collect and summarize oracle monitoring results."""
+        self._print_stage_header("STAGE 18: Monitoring Results", "Collecting EMCY, heartbeat, and anomaly data")
         
         if not self.oracle:
             print("⚠  Oracle not initialized, skipping")
@@ -1473,8 +1621,8 @@ class SecurityTestSuite:
             logger.exception("Failed to collect oracle results")
     
     def _stage_generate_reports(self) -> None:
-        """Stage 17: Generate HTML and JSON reports."""
-        self._print_stage_header("STAGE 17: Report Generation", "Creating comprehensive test reports")
+        """Stage 19: Generate HTML and JSON reports."""
+        self._print_stage_header("STAGE 19: Report Generation", "Creating comprehensive test reports")
         
         try:
             report_config = self.config.get('reporting', {})
