@@ -25,6 +25,8 @@ tests:
   fuzz_concurrent: true       # Concurrent message fuzzing (INTENSIVE)
   fuzz_canid: true            # CAN ID (COB-ID) fuzzing (INTENSIVE - Phase 1)
   fuzz_timing: true           # Timing & delay attack fuzzing (INTENSIVE - Phase 1)
+  fuzz_resource: true         # Resource exhaustion fuzzing (INTENSIVE - Phase 2)
+  fuzz_state_machine: true    # State machine fuzzing (INTENSIVE - Phase 2)
   monitor_emcy: true          # Monitor EMCY frames during testing
   monitor_heartbeat: true     # Monitor heartbeat changes
   monitor_state_transitions: true  # Deep state machine analysis

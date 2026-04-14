@@ -2,7 +2,7 @@
 
 A modular Python framework for CANopen security research and fuzzing on Windows + PCAN hardware.
 
-Current release: v0.2.1
+Current release: v0.3.0
 
 ---
 
@@ -123,7 +123,7 @@ CANOpen-Security-Platform/
 
 ## Full Test Suite (Orchestrator)
 
-The platform includes a complete **15-stage** automated security test suite that runs all discovery, scanning, and fuzzing operations sequentially with integrated monitoring and reporting.
+The platform includes a complete **19-stage** automated security test suite that runs all discovery, scanning, and fuzzing operations sequentially with integrated monitoring and reporting.
 
 ### Running the Full Suite
 
@@ -135,7 +135,7 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite
 python -m canopen_security_platform.orchestrator.run_full_security_suite --config custom.yaml
 ```
 
-### The 15 Stages
+### The 19 Stages
 
 | Stage | Name | Purpose |
 |-------|------|---------|
@@ -152,8 +152,12 @@ python -m canopen_security_platform.orchestrator.run_full_security_suite --confi
 | 11 | EMCY Fuzzing | Send ~180 EMCY error codes, state transitions, and recovery scenarios |
 | 12 | SYNC Fuzzing | Test synchronization robustness (counter overflow, bursts, jitter) |
 | 13 | Concurrent Fuzzing | Test race conditions between PDO, SDO, and NMT messages |
-| 14 | Monitoring Results | Collect detected anomalies and events |
-| 15 | Report Generation | Create HTML and JSON reports |
+| 14 | CAN ID Fuzzing | COB-ID boundary, reserved-ID, and conflict mutation tests |
+| 15 | Timing Fuzzing | Timing attacks (jitter, drift, burst, timeout edge cases) |
+| 16 | Resource Fuzzing | Resource exhaustion and recovery stress scenarios |
+| 17 | State Machine Fuzzing | Illegal transition and state persistence attack sequences |
+| 18 | Monitoring Results | Collect detected anomalies and events |
+| 19 | Report Generation | Create HTML and JSON reports |
 
 ### Configuration
 
@@ -167,6 +171,10 @@ tests:
     fuzz_emcy: true       # NEW: Tier 1 - Emergency message fuzzing
     fuzz_sync: true       # NEW: Tier 1 - Synchronization fuzzing
     fuzz_concurrent: true # NEW: Tier 1 - Race condition testing
+    fuzz_canid: true      # Phase 1 - COB-ID boundary and conflict testing
+    fuzz_timing: true     # Phase 1 - Timing and delay attack testing
+    fuzz_resource: true   # Phase 2 - Resource exhaustion testing
+    fuzz_state_machine: true  # Phase 2 - Illegal state transition testing
 
 object_dictionary:
     device_descriptions_dir: "od_files"
@@ -506,33 +514,30 @@ For OD-aware commands (`od-dump`, `scan-hidden`, `fuzz-sdo`, `fuzz-pdo`, `fuzz-n
 | **Timing Attack Fuzzer** | ✅ Ready | 12 timing/delay attack strategies (v0.2.0) |
 | Oracle | ✅ Ready | Persistence & alert rules added |
 | Event Handlers | ✅ Ready | Async CAN callbacks integrated |
-| **Orchestrator** | ✅ Ready | 17-stage automated test suite, auto bitrate detection (v0.2.1) |
+| **Orchestrator** | ✅ Ready | 19-stage automated test suite, reporting fixes validated on hardware (v0.3.0) |
 | CLI | ✅ Ready | All commands implemented |
 
 ---
 
 ## Development Roadmap
 
-### Current State (April 2026 - v0.2.1)
+### Current State (April 2026 - v0.3.0)
 - [x] Discovery stack complete (passive, SDO, LSS)
 - [x] OD pipeline complete (EDS load, XDD/XDC conversion hooks, hidden scan)
 - [x] Fuzzing engines available: SDO, PDO, NMT, LSS, EMCY, SYNC, Concurrent (v0.1.0)
 - [x] **CAN ID Fuzzer** (10 strategies) — COB-ID boundary, reserved, conflict testing (v0.2.0)
 - [x] **Timing Attack Fuzzer** (12 strategies) — jitter, gaps, drift, burst attacks (v0.2.0)
 - [x] **Auto bitrate detection** — probes 250k/125k/500k/1M/50k/20k/10k on PCAN_USBBUS1 (v0.2.1)
-- [x] Orchestrator integrated (17-stage automated test suite)
+- [x] **Reporting pipeline fix** — JSON/HTML now include all 10 fuzzers and correct suite duration (v0.3.0)
+- [x] Orchestrator integrated (19-stage automated test suite)
 - [x] Extreme in-depth config profile (`config_extreme_indepth.yaml`)
-- [x] Unit tests present for all fuzzing modules (9 fuzzers covered)
-- [x] Full 17-stage suite validated on physical PCAN device (April 13, 2026)
+- [x] Unit tests present across major fuzzing modules, including Phase 2 fuzzers
+- [x] Full 19-stage suite validated on physical PCAN device (April 14, 2026)
 
 ### Near-Term Priorities - **Offensive & Robustness Testing Focus** 🔴
 **Focus**: Expand fuzzing variants, test case coverage, and attack vectors
 
 - [ ] **Fuzzing Variants Expansion**
-  - CAN ID fuzzing (COB-ID boundary testing, reserved ID handling)
-  - Timing/delay attack fuzzing (inter-frame gap manipulation, jitter extremes)
-  - Resource exhaustion variants (sequential message storms, buffer overflow patterns)
-  - State machine escape sequences (transition violations per CANopen state diagram)
   - Protocol boundary fuzz variants (min/max payload sizes, DLC edge cases)
   - Cross-protocol interaction fuzzing (NMT during PDO, SDO during SYNC, etc.)
 

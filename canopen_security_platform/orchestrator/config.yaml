@@ -23,6 +23,8 @@ tests:
   fuzz_concurrent: true       # Fuzz concurrent protocol interactions
   fuzz_canid: true            # Fuzz CAN ID (COB-ID) handling (NEW - Phase 1)
   fuzz_timing: true           # Fuzz timing and delay attacks (NEW - Phase 1)
+  fuzz_resource: true         # Fuzz resource exhaustion attacks (NEW - Phase 2)
+  fuzz_state_machine: true    # Fuzz state-machine escape sequences (NEW - Phase 2)
   monitor_emcy: true          # Monitor EMCY frames during testing
   monitor_heartbeat: true     # Monitor heartbeat changes
 

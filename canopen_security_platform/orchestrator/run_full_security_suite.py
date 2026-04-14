@@ -85,6 +85,9 @@ class TestResults:
     sdo_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     pdo_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     nmt_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    emcy_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    sync_fuzzing_results: Dict[str, Any] = field(default_factory=dict)
+    concurrent_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     canid_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     timing_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     resource_fuzzing_results: Dict[int, Dict[str, Any]] = field(default_factory=dict)
@@ -184,6 +187,8 @@ class SecurityTestSuite:
     ) -> Dict[str, Any]:
         """Normalize fuzzer callback event and enforce classification defaults."""
         normalized = dict(event)
+        if "type" not in normalized and "event_type" in normalized:
+            normalized["type"] = normalized["event_type"]
         normalized.setdefault("source", "fuzzer")
         normalized.setdefault("fuzzer", fuzzer_name)
         if node_id is not None:
@@ -194,6 +199,70 @@ class SecurityTestSuite:
     def _is_device_anomaly(self, event: Dict[str, Any]) -> bool:
         """Return True if event is classified as device anomaly."""
         return event.get("event_classification") == "device_anomaly_detected"
+
+    def _build_stage_result(
+        self,
+        total_tests: int,
+        fuzz_inputs: Optional[List[Dict[str, Any]]] = None,
+        device_anomalies: Optional[List[Dict[str, Any]]] = None,
+        test_results: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Build a consistent result payload for a fuzzing stage."""
+        return {
+            'total_tests': total_tests,
+            'fuzz_input_events': len(fuzz_inputs or []),
+            'device_anomalies': len(device_anomalies or []),
+            'test_results': test_results or [],
+        }
+
+    def _build_report_data(self, include_report_generation: bool = False) -> Dict[str, Any]:
+        """Build a complete report payload for JSON and HTML output."""
+        effective_end_time = self.results.end_time or datetime.now()
+        completed_stages = list(self.results.completed_stages)
+        if include_report_generation and "Report Generation" not in completed_stages:
+            completed_stages.append("Report Generation")
+
+        return {
+            'timestamp': self.results.start_time.isoformat(),
+            'duration': (effective_end_time - self.results.start_time).total_seconds(),
+            'config': self.config,
+            'discovery': {
+                'passive_nodes': list(self.results.passive_nodes),
+                'active_nodes': list(self.results.active_nodes),
+                'lss_nodes': self.results.lss_nodes,
+                'node_details': self.results.node_details,
+            },
+            'object_dictionaries': {
+                'loaded': self.results.loaded_ods,
+                'errors': self.results.od_errors,
+            },
+            'hidden_objects': self.results.hidden_objects,
+            'fuzzing': {
+                'sdo': self.results.sdo_fuzzing_results,
+                'pdo': self.results.pdo_fuzzing_results,
+                'nmt': self.results.nmt_fuzzing_results,
+                'emcy': self.results.emcy_fuzzing_results,
+                'sync': self.results.sync_fuzzing_results,
+                'concurrent': self.results.concurrent_fuzzing_results,
+                'canid': self.results.canid_fuzzing_results,
+                'timing': self.results.timing_fuzzing_results,
+                'resource': self.results.resource_fuzzing_results,
+                'state_machine': self.results.state_machine_fuzzing_results,
+            },
+            'monitoring': {
+                'fuzz_input_events': self.results.fuzz_input_events,
+                'device_anomaly_events': self.results.device_anomaly_events,
+                'emcy_events': self.results.emcy_events,
+                'heartbeat_anomalies': self.results.heartbeat_anomalies,
+                'oracle_alerts': self.results.oracle_alerts,
+            },
+            'summary': {
+                'warnings': self.results.warnings,
+                'errors': self.results.errors,
+                'completed_stages': completed_stages,
+                'failed_stages': self.results.failed_stages,
+            },
+        }
     
     def _default_config(self) -> Dict[str, Any]:
         """Return default configuration."""
@@ -430,6 +499,9 @@ class SecurityTestSuite:
             # Stage 18: Collect oracle results
             self._stage_collect_oracle_results()
             
+            # Set end time BEFORE generating reports (reports need end_time to calculate duration)
+            self.results.end_time = datetime.now()
+            
             # Stage 19: Generate reports
             self._stage_generate_reports()
             
@@ -441,7 +513,6 @@ class SecurityTestSuite:
             self.results.add_error(f"Critical error: {e}")
         finally:
             self._cleanup()
-            self.results.end_time = datetime.now()
         
         self._print_summary()
         
@@ -907,19 +978,24 @@ class SecurityTestSuite:
             # Create oracle callback
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "sdo", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "sdo", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     # Use loaded OD if available, otherwise create empty one
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
@@ -935,11 +1011,12 @@ class SecurityTestSuite:
                     # Execute full fuzzing suite
                     fuzzer.execute()
                     
-                    self.results.sdo_fuzzing_results[node_id] = {
-                        'total_tests': fuzzer.fuzzed_count,
-                        'fuzz_input_events': len(fuzz_inputs),
-                        'device_anomalies': len(device_anomalies),
-                    }
+                    self.results.sdo_fuzzing_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
                     print(f"    ✓ Sent {fuzzer.fuzzed_count} malformed SDO requests")
                     
                 except Exception as e:
@@ -977,19 +1054,24 @@ class SecurityTestSuite:
             # Create oracle callback
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "pdo", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "pdo", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     # Use loaded OD if available, otherwise create empty one
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
@@ -1005,11 +1087,12 @@ class SecurityTestSuite:
                     # Execute full PDO fuzzing suite
                     fuzzer.execute()
                     
-                    self.results.pdo_fuzzing_results[node_id] = {
-                        'total_tests': fuzzer.fuzzed_count,
-                        'fuzz_input_events': len(fuzz_inputs),
-                        'device_anomalies': len(device_anomalies),
-                    }
+                    self.results.pdo_fuzzing_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
                     print(f"    ✓ Sent {fuzzer.fuzzed_count} malformed PDO requests")
                     
                 except Exception as e:
@@ -1046,19 +1129,24 @@ class SecurityTestSuite:
             # Create oracle callback
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "nmt", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "nmt", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     # Use loaded OD if available, otherwise create empty one
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
@@ -1074,11 +1162,12 @@ class SecurityTestSuite:
                     # Execute full NMT fuzzing suite
                     fuzzer.execute()
                     
-                    self.results.nmt_fuzzing_results[node_id] = {
-                        'total_tests': fuzzer.fuzzed_count,
-                        'fuzz_input_events': len(fuzz_inputs),
-                        'device_anomalies': len(device_anomalies),
-                    }
+                    self.results.nmt_fuzzing_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
                     print(f"    ✓ Sent {fuzzer.fuzzed_count} malformed NMT commands")
                     
                 except Exception as e:
@@ -1119,19 +1208,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "emcy", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing EMCY for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "emcy", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1145,11 +1239,13 @@ class SecurityTestSuite:
                     
                     fuzzer.run_all_strategies(iterations=iterations)
                     
-                    self.emcy_results[node_id] = {
-                        'total_tests': fuzzer.fuzzed_count,
-                        'fuzz_input_events': len(fuzz_inputs),
-                        'device_anomalies': len(device_anomalies),
-                    }
+                    self.emcy_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
+                    self.results.emcy_fuzzing_results[node_id] = self.emcy_results[node_id]
                     print(f"    ✓ Sent {fuzzer.fuzzed_count} EMCY messages")
                     
                 except Exception as e:
@@ -1206,11 +1302,13 @@ class SecurityTestSuite:
                 
                 fuzzer.run_all_strategies(iterations=iterations)
                 
-                self.sync_results = {
-                    'total_tests': fuzzer.fuzzed_count,
-                    'fuzz_input_events': len(fuzz_inputs),
-                    'device_anomalies': len(device_anomalies),
-                }
+                self.sync_results = self._build_stage_result(
+                    total_tests=fuzzer.fuzzed_count,
+                    fuzz_inputs=fuzz_inputs,
+                    device_anomalies=device_anomalies,
+                    test_results=fuzzer.test_results,
+                )
+                self.results.sync_fuzzing_results = self.sync_results
                 print(f"    ✓ Sent {fuzzer.fuzzed_count} SYNC messages")
                 
             except Exception as e:
@@ -1251,19 +1349,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "concurrent", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing concurrent messages for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "concurrent", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1277,11 +1380,13 @@ class SecurityTestSuite:
                     
                     fuzzer.run_all_strategies(iterations=iterations)
                     
-                    self.concurrent_results[node_id] = {
-                        'total_tests': fuzzer.fuzzed_count,
-                        'fuzz_input_events': len(fuzz_inputs),
-                        'device_anomalies': len(device_anomalies),
-                    }
+                    self.concurrent_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
+                    self.results.concurrent_fuzzing_results[node_id] = self.concurrent_results[node_id]
                     print(f"    ✓ Sent {fuzzer.fuzzed_count} concurrent messages")
                     
                 except Exception as e:
@@ -1322,19 +1427,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "canid", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing CAN IDs for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "canid", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1347,10 +1457,13 @@ class SecurityTestSuite:
                     )
                     fuzzer.execute()
                     
-                    self.canid_results[node_id] = {
-                        "fuzzed_count": fuzzer.fuzzed_count,
-                        "test_results": fuzzer.test_results,
-                    }
+                    self.canid_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
+                    self.results.canid_fuzzing_results[node_id] = self.canid_results[node_id]
                     
                     time.sleep(delay_ms / 1000.0)
                     
@@ -1389,19 +1502,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "timing", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing timing for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "timing", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1414,10 +1532,13 @@ class SecurityTestSuite:
                     )
                     fuzzer.execute()
                     
-                    self.timing_results[node_id] = {
-                        "fuzzed_count": fuzzer.fuzzed_count,
-                        "test_results": fuzzer.test_results,
-                    }
+                    self.timing_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
+                    self.results.timing_fuzzing_results[node_id] = self.timing_results[node_id]
                     
                 except Exception as e:
                     logger.debug(f"Timing fuzzing error for node {node_id}: {e}")
@@ -1454,19 +1575,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "resource", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing resources for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "resource", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1481,10 +1607,12 @@ class SecurityTestSuite:
                     )
                     fuzzer.execute()
                     
-                    self.resource_results[node_id] = {
-                        "fuzzed_count": fuzzer.fuzzed_count,
-                        "test_results": fuzzer.test_results,
-                    }
+                    self.resource_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
                     self.results.resource_fuzzing_results[node_id] = self.resource_results[node_id]
                     
                 except Exception as e:
@@ -1522,19 +1650,24 @@ class SecurityTestSuite:
             
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
-
-            def oracle_callback(event: Dict[str, Any]) -> None:
-                normalized = self._normalize_fuzzer_event(event, "state_machine", None)
-                fuzz_inputs.append(normalized)
-                if self._is_device_anomaly(normalized):
-                    device_anomalies.append(normalized)
-                if self.oracle:
-                    self.oracle.record_event(normalized)
             
             for node_id in sorted(target_nodes):
                 print(f"  Fuzzing state machine for node {node_id}...")
                 
                 try:
+                    node_fuzz_inputs: List[Dict[str, Any]] = []
+                    node_device_anomalies: List[Dict[str, Any]] = []
+
+                    def oracle_callback(event: Dict[str, Any], current_node_id: int = node_id) -> None:
+                        normalized = self._normalize_fuzzer_event(event, "state_machine", current_node_id)
+                        fuzz_inputs.append(normalized)
+                        node_fuzz_inputs.append(normalized)
+                        if self._is_device_anomaly(normalized):
+                            device_anomalies.append(normalized)
+                            node_device_anomalies.append(normalized)
+                        if self.oracle:
+                            self.oracle.record_event(normalized)
+
                     od = self.results.loaded_od_objects.get(node_id)
                     if not od:
                         od = RuntimeObjectDictionary()
@@ -1547,10 +1680,12 @@ class SecurityTestSuite:
                     )
                     fuzzer.execute()
                     
-                    self.state_machine_results[node_id] = {
-                        "fuzzed_count": fuzzer.fuzzed_count,
-                        "test_results": fuzzer.test_results,
-                    }
+                    self.state_machine_results[node_id] = self._build_stage_result(
+                        total_tests=fuzzer.fuzzed_count,
+                        fuzz_inputs=node_fuzz_inputs,
+                        device_anomalies=node_device_anomalies,
+                        test_results=fuzzer.test_results,
+                    )
                     self.results.state_machine_fuzzing_results[node_id] = self.state_machine_results[node_id]
                     
                 except Exception as e:
@@ -1634,13 +1769,13 @@ class SecurityTestSuite:
             # Generate JSON export
             if report_config.get('json_export', True):
                 json_path = output_dir / f"results_{timestamp}.json"
-                self._export_json(json_path)
+                self._export_json(json_path, include_report_generation=True)
                 print(f"✓ JSON report: {json_path}")
             
             # Generate HTML report
             if report_config.get('html_report', True):
                 html_path = output_dir / f"report_{timestamp}.html"
-                self._generate_html_report(html_path)
+                self._generate_html_report(html_path, include_report_generation=True)
                 print(f"✓ HTML report: {html_path}")
             
             print()
@@ -1651,59 +1786,26 @@ class SecurityTestSuite:
             self.results.mark_stage_failed("Report Generation", str(e))
             logger.exception("Report generation failed")
     
-    def _export_json(self, path: Path) -> None:
+    def _export_json(self, path: Path, include_report_generation: bool = False) -> None:
         """Export results as JSON.
         
         Args:
             path: Output file path
         """
-        data = {
-            'timestamp': self.results.start_time.isoformat(),
-            'duration': (self.results.end_time - self.results.start_time).total_seconds() if self.results.end_time else 0,
-            'config': self.config,
-            'discovery': {
-                'passive_nodes': list(self.results.passive_nodes),
-                'active_nodes': list(self.results.active_nodes),
-                'lss_nodes': self.results.lss_nodes,
-                'node_details': self.results.node_details,
-            },
-            'object_dictionaries': {
-                'loaded': self.results.loaded_ods,
-                'errors': self.results.od_errors,
-            },
-            'hidden_objects': self.results.hidden_objects,
-            'fuzzing': {
-                'sdo': self.results.sdo_fuzzing_results,
-                'pdo': self.results.pdo_fuzzing_results,
-                'nmt': self.results.nmt_fuzzing_results,
-            },
-            'monitoring': {
-                'fuzz_input_events': self.results.fuzz_input_events,
-                'device_anomaly_events': self.results.device_anomaly_events,
-                'emcy_events': self.results.emcy_events,
-                'heartbeat_anomalies': self.results.heartbeat_anomalies,
-                'oracle_alerts': self.results.oracle_alerts,
-            },
-            'summary': {
-                'warnings': self.results.warnings,
-                'errors': self.results.errors,
-                'completed_stages': self.results.completed_stages,
-                'failed_stages': self.results.failed_stages,
-            },
-        }
+        data = self._build_report_data(include_report_generation=include_report_generation)
         
         with open(path, 'w') as f:
             json.dump(data, f, indent=2, default=str)
     
-    def _generate_html_report(self, path: Path) -> None:
-        """Generate HTML report (basic version for now).
+    def _generate_html_report(self, path: Path, include_report_generation: bool = False) -> None:
+        """Generate HTML report.
         
         Args:
             path: Output file path
         """
-        # For now, generate a simple HTML report
-        # This can be enhanced with a proper HTML reporter module later
-        
+        report_data = self._build_report_data(include_report_generation=include_report_generation)
+        duration = report_data['duration']
+
         html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1723,11 +1825,6 @@ class SecurityTestSuite:
         th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
         th {{ background: #34495e; color: white; }}
         tr:hover {{ background: #f8f9fa; }}
-        .badge {{ display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 0.9em; }}
-        .badge-success {{ background: #27ae60; color: white; }}
-        .badge-warning {{ background: #f39c12; color: white; }}
-        .badge-error {{ background: #e74c3c; color: white; }}
-        .badge-info {{ background: #3498db; color: white; }}
     </style>
 </head>
 <body>
@@ -1736,9 +1833,9 @@ class SecurityTestSuite:
         
         <div class="summary">
             <p><strong>Start Time:</strong> {self.results.start_time.strftime('%Y-%m-%d %H:%M:%S')}</p>
-            <p><strong>Duration:</strong> N/A (report generated before completion)</p>
-            <p><strong>Completed Stages:</strong> <span class="success">{len(self.results.completed_stages)}</span></p>
-            <p><strong>Failed Stages:</strong> <span class="error">{len(self.results.failed_stages)}</span></p>
+            <p><strong>Duration:</strong> {duration:.1f} seconds</p>
+            <p><strong>Completed Stages:</strong> <span class="success">{len(report_data['summary']['completed_stages'])}</span></p>
+            <p><strong>Failed Stages:</strong> <span class="error">{len(report_data['summary']['failed_stages'])}</span></p>
         </div>
         
         <h2>Discovery Results</h2>
@@ -1777,8 +1874,6 @@ class SecurityTestSuite:
             device_type = details.get('device_type', 'Unknown')
             device_name = details.get('device_name', 'Unknown')
             state = details.get('passive_state', 'Unknown')
-            
-            # Format device type as hex if it's an integer
             device_type_str = f"0x{device_type:08X}" if isinstance(device_type, int) else str(device_type)
             
             html += f"""
@@ -1801,15 +1896,16 @@ class SecurityTestSuite:
             html += f"<p>Found <strong>{total_hidden}</strong> hidden objects across <strong>{len(self.results.hidden_objects)}</strong> nodes</p>"
             
             for node_id, objects in self.results.hidden_objects.items():
-                html += f"<h3>Node {node_id}: {len(objects)} hidden objects</h3>"
-                html += "<table><tr><th>Index</th><th>Subindex</th><th>Access</th></tr>"
-                for obj in objects[:20]:  # Limit display
-                    idx = obj.get('index', 0)
-                    subidx = obj.get('subindex', 0)
-                    access = obj.get('access', 'unknown')
-                    html += f"<tr><td>0x{idx:04X}</td><td>{subidx}</td><td>{access}</td></tr>"
+                html += f"<h3>Node {node_id}: {len(objects)} hidden indices</h3>"
+                html += "<table><tr><th>Index</th><th>Subindices</th><th>Count</th></tr>"
+                for idx, subidx_map in list(objects.items())[:20]:
+                    subindices = sorted(subidx_map.keys())
+                    displayed = ", ".join(str(subidx) for subidx in subindices[:12])
+                    if len(subindices) > 12:
+                        displayed += ", ..."
+                    html += f"<tr><td>0x{idx:04X}</td><td>{displayed}</td><td>{len(subindices)}</td></tr>"
                 if len(objects) > 20:
-                    html += f"<tr><td colspan='3'>... and {len(objects) - 20} more</td></tr>"
+                    html += f"<tr><td colspan='3'>... and {len(objects) - 20} more indices</td></tr>"
                 html += "</table>"
         else:
             html += "<p>No hidden objects found</p>"
@@ -1817,24 +1913,49 @@ class SecurityTestSuite:
         html += """
         <h2>Fuzzing Results</h2>
 """
-        
-        # SDO Fuzzing
-        if self.results.sdo_fuzzing_results:
-            html += "<h3>SDO Fuzzing</h3><table><tr><th>Node</th><th>Total Tests</th><th>Anomalies</th></tr>"
-            for node_id, result in self.results.sdo_fuzzing_results.items():
+
+        fuzzer_labels = {
+            'sdo': 'SDO Fuzzing',
+            'pdo': 'PDO Fuzzing',
+            'nmt': 'NMT Fuzzing',
+            'emcy': 'EMCY Fuzzing',
+            'sync': 'SYNC Fuzzing',
+            'concurrent': 'Concurrent Fuzzing',
+            'canid': 'CAN ID Fuzzing',
+            'timing': 'Timing Fuzzing',
+            'resource': 'Resource Fuzzing',
+            'state_machine': 'State Machine Fuzzing',
+        }
+
+        for fuzzer_key, label in fuzzer_labels.items():
+            results = report_data['fuzzing'].get(fuzzer_key)
+            if not results:
+                continue
+
+            html += f"<h3>{label}</h3><table><tr><th>Target</th><th>Total Tests</th><th>Fuzz Events</th><th>Device Anomalies</th></tr>"
+            rows = [('broadcast', results)] if fuzzer_key == 'sync' else list(results.items())
+            for target, result in rows:
                 total = result.get('total_tests', 0)
-                anomalies = result.get('anomalies', [])
-                anomaly_count = sum(a.get('anomalies', 0) for a in anomalies)
-                html += f"<tr><td>{node_id}</td><td>{total}</td><td class='{'error' if anomaly_count > 0 else 'success'}'>{anomaly_count}</td></tr>"
+                fuzz_event_count = result.get('fuzz_input_events', 0)
+                anomaly_count = result.get('device_anomalies', 0)
+                anomaly_class = 'error' if anomaly_count > 0 else 'success'
+                html += f"<tr><td>{target}</td><td>{total}</td><td>{fuzz_event_count}</td><td class='{anomaly_class}'>{anomaly_count}</td></tr>"
             html += "</table>"
         
-        # Monitoring
         html += f"""
         <h2>Monitoring Events</h2>
         <table>
             <tr>
                 <th>Event Type</th>
                 <th>Count</th>
+            </tr>
+            <tr>
+                <td>Fuzz Input Events</td>
+                <td>{len(self.results.fuzz_input_events)}</td>
+            </tr>
+            <tr>
+                <td>Device Anomaly Events</td>
+                <td class="{'error' if len(self.results.device_anomaly_events) > 0 else 'success'}">{len(self.results.device_anomaly_events)}</td>
             </tr>
             <tr>
                 <td>EMCY Events</td>

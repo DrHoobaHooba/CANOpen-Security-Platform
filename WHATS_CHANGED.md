@@ -1,6 +1,42 @@
-# Recent Updates - April 13, 2026 (v0.2.1 - Auto Bitrate Detection)
+# Recent Updates - April 14, 2026 (v0.3.0 - Reporting Pipeline Fix)
 
 > **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.
+
+## v0.3.0 Release Notes — April 14, 2026
+
+**Release Type**: Minor — Reporting Reliability and Completeness  
+**Focus**: Ensure report accuracy for long-running full-suite fuzzing runs  
+**Validated**: Full hardware run generated complete JSON/HTML reports with non-zero duration and all fuzzers present
+
+### ✅ Reporting Architecture Consolidation
+
+- Added unified report payload builder used by both JSON and HTML exporters.
+- Added normalized stage result builder so all fuzzer stages share the same schema.
+- Extended `TestResults` to include missing fuzzer result containers (`emcy`, `sync`, `concurrent`).
+
+### ✅ Full Fuzzer Serialization in Reports
+
+- JSON and HTML report outputs now include all 10 fuzzer families:
+   `sdo`, `pdo`, `nmt`, `emcy`, `sync`, `concurrent`, `canid`, `timing`, `resource`, `state_machine`.
+- Added per-node (or broadcast for SYNC) result normalization with `total_tests`, `fuzz_input_events`, `device_anomalies`, and `test_results`.
+
+### ✅ Duration and Stage Accounting Fixes
+
+- Fixed end-time sequencing so suite duration is calculated from actual run completion instead of defaulting to zero.
+- Report generation stage can now be included in report summaries when exporting.
+
+### ✅ Hidden Object HTML Rendering Fix
+
+- Updated HTML report rendering to handle hidden object structure as index-to-subindex mappings.
+- Output now shows hidden indices and subindex counts without shape mismatch errors.
+
+### ✅ Validation
+
+- Added targeted report-generation tests in `tests/test_orchestrator_reporting.py`.
+- Verified on live hardware run (`results_20260414_153211.json`, `report_20260414_153211.html`) showing:
+   - non-zero duration
+   - complete fuzzer sections
+   - consistent stage totals
 
 ## v0.2.1 Release Notes — April 13, 2026
 
