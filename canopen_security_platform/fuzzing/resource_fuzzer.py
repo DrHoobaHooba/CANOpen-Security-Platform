@@ -24,7 +24,7 @@ from queue import Queue
 
 import can
 
-from ..hal.bus_pcan import BusInterface
+from ..hal.bus_pcan import BusInterface, CANTransmitQueueFullError
 from ..od.runtime_od import RuntimeObjectDictionary
 from ..utils.logging_utils import get_logger
 
@@ -152,6 +152,7 @@ class ResourceFuzzer:
         pdo_cob_id = self.TPDO1_BASE + self.node_id
         start_time = time.time()
         messages_sent = 0
+        queue_full_count = 0
 
         # Send messages as fast as possible for duration
         while time.time() - start_time < self.duration_seconds:
@@ -162,8 +163,20 @@ class ResourceFuzzer:
                     self.bus.send(msg)
                     messages_sent += 1
                     self.fuzzed_count += 1
+                except CANTransmitQueueFullError:
+                    # Expected backpressure during a flood: the host TX queue is
+                    # full. Count it and back off briefly to let the queue drain
+                    # instead of logging a per-frame error.
+                    queue_full_count += 1
+                    time.sleep(0.001)
                 except Exception as e:
                     logger.warning("Failed to send PDO flood message: %s", e)
+
+        if queue_full_count:
+            logger.info(
+                "PDO buffer flood: %d frames sent, %d deferred on TX-queue backpressure",
+                messages_sent, queue_full_count,
+            )
 
         self._record_result(
             ResourceMutationStrategy.PDO_BUFFER_FLOOD,
@@ -344,6 +357,7 @@ class ResourceFuzzer:
         sync_cob_id = self.SYNC_COB_ID
         start_time = time.time()
         messages_sent = 0
+        queue_full_count = 0
 
         # Send SYNC messages as fast as possible
         while time.time() - start_time < self.duration_seconds:
@@ -357,8 +371,20 @@ class ResourceFuzzer:
                     self.bus.send(msg)
                     messages_sent += 1
                     self.fuzzed_count += 1
+                except CANTransmitQueueFullError:
+                    # Expected backpressure during a burst: the host TX queue is
+                    # full. Count it and back off briefly to let the queue drain
+                    # instead of logging a per-frame error.
+                    queue_full_count += 1
+                    time.sleep(0.001)
                 except Exception as e:
                     logger.warning("Failed to send SYNC burst: %s", e)
+
+        if queue_full_count:
+            logger.info(
+                "SYNC burst: %d frames sent, %d deferred on TX-queue backpressure",
+                messages_sent, queue_full_count,
+            )
 
         self._record_result(
             ResourceMutationStrategy.SYNC_BURST,

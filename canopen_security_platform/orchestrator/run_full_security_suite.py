@@ -51,6 +51,7 @@ from ..fuzzing.timing_fuzzer import TimingFuzzer
 from ..fuzzing.resource_fuzzer import ResourceFuzzer
 from ..fuzzing.state_machine_fuzzer import StateMachineFuzzer
 from ..monitoring.oracle import Oracle
+from ..monitoring.device_monitor import DeviceMonitor
 from ..utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -154,6 +155,8 @@ class SecurityTestSuite:
         self.bus: Optional[BusInterface] = None
         self.network: Optional[canopen.Network] = None
         self.oracle: Optional[Oracle] = None
+        self.device_monitor: Optional[DeviceMonitor] = None
+        self._device_monitor_stats: Optional[Dict[str, Any]] = None
         
     def _load_config(self, config_path: Optional[Path] = None) -> Dict[str, Any]:
         """Load configuration from YAML file.
@@ -456,6 +459,11 @@ class SecurityTestSuite:
             if self.config['tests'].get('hidden_od_scan', True):
                 self._stage_hidden_od_scan()
             
+            # Start live device-response monitoring for the fuzzing phase so
+            # that EMCY, boot-up and heartbeat reactions are captured as
+            # device anomalies/events rather than being missed entirely.
+            self._start_device_monitor()
+            
             # Stage 8: SDO fuzzing
             if self.config['tests'].get('fuzz_sdo', True):
                 self._stage_sdo_fuzzing()
@@ -497,6 +505,7 @@ class SecurityTestSuite:
                 self._stage_state_machine_fuzzing()
             
             # Stage 18: Collect oracle results
+            self._stop_device_monitor()
             self._stage_collect_oracle_results()
             
             # Set end time BEFORE generating reports (reports need end_time to calculate duration)
@@ -663,17 +672,40 @@ class SecurityTestSuite:
                     AlertRule(
                         name="EMCY_Critical",
                         event_type="emcy",
-                        condition=lambda e: e.get('severity', 0) >= 0x10,
+                        # A non-zero EMCY error code means the device is
+                        # reporting an active fault (code 0x0000 is an
+                        # error-reset and is benign).
+                        condition=lambda e: e.get('error_code', 0) != 0,
                         severity="critical",
                     )
                 )
-                
+
                 self.oracle.add_alert_rule(
                     AlertRule(
                         name="Heartbeat_Lost",
-                        event_type="heartbeat",
-                        condition=lambda e: e.get('state') == 'timeout',
+                        event_type="timeout",
+                        # The liveness watchdog emits a 'timeout' event when a
+                        # previously-live node stops sending heartbeats.
+                        condition=lambda e: True,
                         severity="warning",
+                    )
+                )
+
+                self.oracle.add_alert_rule(
+                    AlertRule(
+                        name="NMT_State_Regression",
+                        event_type="state_regression",
+                        condition=lambda e: True,
+                        severity="warning",
+                    )
+                )
+
+                self.oracle.add_alert_rule(
+                    AlertRule(
+                        name="Unexpected_Reboot",
+                        event_type="reboot",
+                        condition=lambda e: True,
+                        severity="critical",
                     )
                 )
             
@@ -683,6 +715,45 @@ class SecurityTestSuite:
         except Exception as e:
             self.results.mark_stage_failed("Initialize Oracle", str(e))
             logger.exception("Failed to initialize oracle")
+    
+    def _start_device_monitor(self) -> None:
+        """Start live monitoring of device responses during fuzzing.
+
+        Attaches a passive listener to the bus so that EMCY, boot-up and
+        heartbeat frames emitted by real devices are classified by the oracle
+        as device events/anomalies. Safe to call even if the oracle or bus is
+        unavailable (it will simply skip).
+        """
+        if not self.oracle or not self.bus:
+            return
+        try:
+            raw_bus = self.bus.get_raw_bus()
+            if raw_bus is None:
+                logger.warning(
+                    "Device monitor not started: underlying bus is not open yet"
+                )
+                return
+            self.device_monitor = DeviceMonitor(self.oracle, raw_bus)
+            if self.device_monitor.start():
+                print("✓ Device response monitor active (EMCY/heartbeat/boot-up)")
+                print()
+        except Exception as e:
+            logger.warning("Failed to start device monitor: %s", e)
+            self.device_monitor = None
+    
+    def _stop_device_monitor(self) -> None:
+        """Stop the live device-response monitor if running."""
+        if not self.device_monitor:
+            return
+        try:
+            stats = self.device_monitor.stats
+            self._device_monitor_stats = stats
+            self.device_monitor.stop()
+            logger.info("Device monitor observed frames: %s", stats)
+        except Exception as e:
+            logger.warning("Failed to stop device monitor: %s", e)
+        finally:
+            self.device_monitor = None
     
     def _stage_passive_discovery(self) -> None:
         """Stage 3: Passive network discovery."""
@@ -1738,6 +1809,18 @@ class SecurityTestSuite:
             print(f"  • Total Alerts: {len(alerts)}")
             print(f"  • EMCY Events: {len(self.results.emcy_events)}")
             print(f"  • Heartbeat Anomalies: {len(self.results.heartbeat_anomalies)}")
+
+            if self._device_monitor_stats:
+                dm = self._device_monitor_stats
+                print()
+                print("Device Response Monitor:")
+                print(f"  • Frames observed: {dm.get('frames_seen', 0)} "
+                      f"(EMCY={dm.get('emcy_seen', 0)}, "
+                      f"heartbeat={dm.get('heartbeat_seen', 0)}, "
+                      f"boot-up={dm.get('bootup_seen', 0)})")
+                print(f"  • State regressions: {dm.get('state_regressions', 0)}")
+                print(f"  • Liveness timeouts: {dm.get('timeouts', 0)} "
+                      f"(recoveries: {dm.get('recoveries', 0)})")
             
             if alerts:
                 print("\nTop Alerts:")
@@ -2027,6 +2110,10 @@ class SecurityTestSuite:
     
     def _cleanup(self) -> None:
         """Clean up resources."""
+        try:
+            self._stop_device_monitor()
+        except Exception as e:
+            logger.debug(f"Error stopping device monitor during cleanup: {e}")
         try:
             if self.bus:
                 self.bus.close()

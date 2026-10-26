@@ -325,6 +325,16 @@ class SDOFuzzer:
                 strategy.value, data.hex()
             )
 
+            # Notify oracle if callback provided
+            if self.oracle:
+                self.oracle({
+                    "event_type": "fuzz_input_sent",
+                    "fuzzer": "sdo",
+                    "strategy": strategy.value,
+                    "cob_id": self.sdo_rx_cob,
+                    "data": data.hex(),
+                })
+
         except Exception as e:
             logger.warning("Failed to send SDO request: %s", e)
 

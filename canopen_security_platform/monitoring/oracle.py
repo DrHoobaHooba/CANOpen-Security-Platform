@@ -144,6 +144,41 @@ class Oracle:
         
         self._check_alert_rules(event)
 
+    def on_state_regression(
+        self,
+        node_id: int,
+        old_state: Any,
+        new_state: Any,
+    ) -> None:
+        """Record an unexpected NMT state regression as a device anomaly.
+
+        Emitted when a node that was OPERATIONAL drops to a non-operational
+        state (e.g. STOPPED or PRE-OPERATIONAL) without being commanded to,
+        which usually means fuzzing disrupted the device.
+
+        Args:
+            node_id: Node ID
+            old_state: Previous NMT state (name or byte)
+            new_state: New NMT state (name or byte)
+        """
+        event = {
+            "type": "state_regression",
+            "timestamp": time.time(),
+            "node_id": node_id,
+            "old_state": str(old_state),
+            "new_state": str(new_state),
+            "event_classification": "device_anomaly_detected",
+        }
+
+        self._record_event(event)
+        self.node_states.setdefault(node_id, {})["last_state_regression"] = event
+
+        logger.warning(
+            "NMT state regression on node %d: %s -> %s",
+            node_id, old_state, new_state
+        )
+        self._check_alert_rules(event)
+
     def on_state_change(
         self,
         node_id: int,

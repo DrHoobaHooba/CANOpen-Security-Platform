@@ -80,6 +80,23 @@ class NMTFuzzer:
 
         logger.debug("NMT Fuzzer initialized for node %d", node_id)
 
+    def _notify_oracle(self, strategy: str, **fields: Any) -> None:
+        """Notify the oracle that a fuzz frame was sent.
+
+        Args:
+            strategy: Fuzzing strategy name
+            **fields: Additional event fields (cob_id, data, etc.)
+        """
+        if not self.oracle:
+            return
+        event: Dict[str, Any] = {
+            "event_type": "fuzz_input_sent",
+            "fuzzer": "nmt",
+            "strategy": strategy,
+        }
+        event.update(fields)
+        self.oracle(event)
+
     def rapid_transitions(self) -> None:
         """Send rapid successive NMT state transition commands.
 
@@ -212,6 +229,9 @@ class NMTFuzzer:
             self.bus.send(msg)
             time.sleep(0.05)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "heartbeat_valid_state", state=int(state), cob_id=heartbeat_cob_id
+            )
 
         # Test 2: Invalid heartbeat states
         logger.info("  Testing invalid heartbeat states")
@@ -225,6 +245,9 @@ class NMTFuzzer:
             self.bus.send(msg)
             time.sleep(0.02)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "heartbeat_invalid_state", state=int(state), cob_id=heartbeat_cob_id
+            )
 
         # Test 3: Rapid heartbeat changes
         logger.info("  Testing rapid heartbeat state changes")
@@ -238,6 +261,9 @@ class NMTFuzzer:
             self.bus.send(msg)
             time.sleep(0.001)  # 1ms between heartbeats
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "heartbeat_rapid_change", state=int(state), cob_id=heartbeat_cob_id
+            )
 
         # Test 4: Missing heartbeat (long pause)
         logger.info("  Testing missing heartbeat scenario")
@@ -249,6 +275,7 @@ class NMTFuzzer:
         self.bus.send(msg)
         time.sleep(0.5)  # Long gap (should trigger timeout on real devices)
         self.fuzzed_count += 1
+        self._notify_oracle("heartbeat_missing", cob_id=heartbeat_cob_id)
 
         # Test 5: Oversized heartbeat frames
         logger.info("  Testing oversized heartbeat frames")
@@ -261,6 +288,9 @@ class NMTFuzzer:
             self.bus.send(msg)
             time.sleep(0.02)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "heartbeat_oversized", payload_len=payload_len, cob_id=heartbeat_cob_id
+            )
 
     def guard_time_fuzzing(self) -> None:
         """Fuzz NMT guard time and lifetime monitoring via SDO.
@@ -394,6 +424,14 @@ class NMTFuzzer:
                 "data": data.hex(),
             })
 
+            self._notify_oracle(
+                strategy,
+                command=cmd,
+                node_id=node_id,
+                cob_id=self.NMT_CMD_COB_ID,
+                data=data.hex(),
+            )
+
             logger.debug(
                 "Sent NMT command (cmd=0x%02X, node=%d, strategy=%s)",
                 cmd, node_id, strategy
@@ -447,6 +485,14 @@ class NMTFuzzer:
                 "subindex": subindex,
                 "value": hex(value),
             })
+
+            self._notify_oracle(
+                strategy,
+                index=hex(index),
+                subindex=subindex,
+                value=hex(value),
+                cob_id=sdo_rx_cob,
+            )
 
         except Exception as e:
             logger.warning(

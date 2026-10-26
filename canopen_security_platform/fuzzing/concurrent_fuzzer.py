@@ -69,6 +69,23 @@ class ConcurrentFuzzer:
 
         logger.debug("Concurrent Fuzzer initialized for node %d", node_id)
 
+    def _notify_oracle(self, strategy: str, **fields: Any) -> None:
+        """Notify the oracle that a fuzz frame was sent.
+
+        Args:
+            strategy: Fuzzing strategy name
+            **fields: Additional event fields (cob_id, data, etc.)
+        """
+        if not self.oracle:
+            return
+        event: Dict[str, Any] = {
+            "event_type": "fuzz_input_sent",
+            "fuzzer": "concurrent",
+            "strategy": strategy,
+        }
+        event.update(fields)
+        self.oracle(event)
+
     def sdо_sdo_interleaving(self) -> None:
         """Fuzz SDO by interrupting transfers with other SDO requests.
 
@@ -106,6 +123,13 @@ class ConcurrentFuzzer:
             self.bus.send(msg)
             request_idx += 1
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "sdo_interleaving",
+                index=hex(obj_idx),
+                subindex=obj_sub,
+                cob_id=self.sdo_rx_cob,
+                data=bytes(data).hex(),
+            )
 
             time.sleep(0.005)  # 5ms between requests
 
@@ -136,6 +160,11 @@ class ConcurrentFuzzer:
                 self.bus.send(msg)
                 counter += 1
                 self.fuzzed_count += 1
+                self._notify_oracle(
+                    "sdo_during_pdo:pdo_stream",
+                    cob_id=self.pdo1_tx_cob,
+                    data=bytes(pdo_data).hex(),
+                )
                 time.sleep(0.05)  # PDO every 50ms
 
         # Thread function to send SDOs
@@ -165,6 +194,13 @@ class ConcurrentFuzzer:
                 self.bus.send(msg)
                 idx += 1
                 self.fuzzed_count += 1
+                self._notify_oracle(
+                    "sdo_during_pdo:sdo_stream",
+                    index=hex(obj_idx),
+                    subindex=obj_sub,
+                    cob_id=self.sdo_rx_cob,
+                    data=bytes(data).hex(),
+                )
                 time.sleep(0.08)  # Staggered SDO timing
 
         # Run both streams concurrently
@@ -406,6 +442,9 @@ class ConcurrentFuzzer:
             )
             self.bus.send(msg)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "nmt_command", command=cmd, node_id=node_id, cob_id=self.nmt_cmd_cob
+            )
         except Exception as e:
             logger.warning("Failed to send NMT command: %s", e)
 
@@ -419,6 +458,7 @@ class ConcurrentFuzzer:
             )
             self.bus.send(msg)
             self.fuzzed_count += 1
+            self._notify_oracle("sync", counter=counter & 0xFF, cob_id=self.sync_cob)
         except Exception as e:
             logger.warning("Failed to send SYNC: %s", e)
 
@@ -431,6 +471,9 @@ class ConcurrentFuzzer:
                 is_extended_id=False
             )
             self.bus.send(msg)
+            self._notify_oracle(
+                "pdo", data=bytes(data).hex(), cob_id=self.pdo1_tx_cob
+            )
         except Exception as e:
             logger.warning("Failed to send PDO: %s", e)
 
@@ -450,6 +493,13 @@ class ConcurrentFuzzer:
             )
             self.bus.send(msg)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "sdo_request",
+                index=hex(obj_idx),
+                subindex=obj_sub,
+                cob_id=self.sdo_rx_cob,
+                data=bytes(data).hex(),
+            )
         except Exception as e:
             logger.warning("Failed to send SDO request: %s", e)
 
@@ -473,6 +523,13 @@ class ConcurrentFuzzer:
             )
             self.bus.send(msg)
             self.fuzzed_count += 1
+            self._notify_oracle(
+                "pdo_param_write",
+                index=hex(pdo_idx),
+                subindex=subindex,
+                value=hex(value),
+                cob_id=self.sdo_rx_cob,
+            )
         except Exception as e:
             logger.warning("Failed to write PDO param: %s", e)
 

@@ -37,6 +37,16 @@ class CANTransmitError(Exception):
     pass
 
 
+class CANTransmitQueueFullError(CANTransmitError):
+    """Raised when the host TX queue is full (transient backpressure).
+
+    Subclass of CANTransmitError so existing callers that catch
+    CANTransmitError keep working, while flood/burst fuzzers can catch this
+    specifically to back off instead of logging a per-frame error.
+    """
+    pass
+
+
 class CANReceiveError(Exception):
     """Raised when frame reception fails."""
     pass
@@ -291,7 +301,18 @@ class BusInterface:
 
         except can.CanOperationError as e:
             self._error_count += 1
-            error_msg = f"CAN transmit failed: {str(e)}"
+            msg_text = str(e)
+            lowered = msg_text.lower()
+            if "queue is full" in lowered or "buffer" in lowered:
+                # Transmit backpressure: the host-side TX queue is saturated.
+                # This is a transient, expected condition during flood/burst
+                # fuzzing (not a hard failure), so log at DEBUG to avoid
+                # flooding the log with a per-frame error.
+                logger.debug("CAN transmit backpressure (TX queue full): %s", msg_text)
+                raise CANTransmitQueueFullError(
+                    f"CAN transmit backpressure: {msg_text}"
+                ) from e
+            error_msg = f"CAN transmit failed: {msg_text}"
             logger.error(error_msg)
             raise CANTransmitError(error_msg) from e
 
