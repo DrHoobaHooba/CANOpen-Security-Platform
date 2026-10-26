@@ -65,7 +65,7 @@ fuzzing_sdo:
     - "read_only_write"
     - "invalid_subindex"
     - "data_mutation"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 50  # Delay between fuzzing tests
   skip_critical_objects: true # Skip known critical objects (0x1000, 0x1001, etc.)
 
@@ -77,7 +77,7 @@ fuzzing_pdo:
     - "invalid_length"
     - "data_mutation"
     - "burst_flood"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 100
 
 # NMT Fuzzing Parameters (includes heartbeat and guard time fuzzing)
@@ -89,7 +89,7 @@ fuzzing_nmt:
     - "rapid_state_changes"
     - "heartbeat"              # NEW: Test heartbeat producer/consumer
     - "guard_time"              # NEW: Test OD 0x100C/0x100D
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 200
   monitor_recovery: true      # Monitor if nodes recover after NMT fuzzing
 
@@ -104,7 +104,7 @@ fuzzing_emcy:
     - "rapid_burst"
     - "state_transition"
     - "recovery_sequence"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 100
 
 # SYNC Fuzzing Parameters (NEW - Tier 1)
@@ -150,7 +150,7 @@ fuzzing_canid:
     - "broadcast_vs_unicast"
     - "duplicate_cob_ids"
     - "cob_id_fuzz_mask"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 25
 
 # Timing & Delay Attack Fuzzing Parameters (NEW - Phase 1)
@@ -170,7 +170,7 @@ fuzzing_timing:
     - "delayed_responses"
     - "clock_drift_simulation"
     - "timing_amplification"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   min_delay_ms: 0
   max_delay_ms: 5000
   burst_size_max: 100
@@ -192,7 +192,7 @@ fuzzing_resource:
     - "stack_overflow_attempt"
     - "buffer_wraparound"
     - "resource_recovery_test"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   max_concurrent: 10
   duration_seconds: 5
   delay_between_tests_ms: 50
@@ -212,7 +212,7 @@ fuzzing_state_machine:
     - "producer_consumer_desync"
     - "nmt_spurious_response"
     - "state_persistence_test"
-  target_nodes: [112]         # Force Node ID 112
+  target_nodes: [10]         # Force Node ID 10
   delay_between_tests_ms: 100
   od_reference_checks: true
 

@@ -67,8 +67,8 @@ def test_diff_with_eds(fake_od):
 
     scanner.results[1] = {0x2000: {0: 1}}
     diffs = scanner.diff_with_eds(1, fake_od)
-    assert 0x2000 in diffs["hidden"]
-    assert 0x1000 in diffs["missing"] or 0x2000 in diffs["hidden"]
+    assert diffs["hidden"] == []
+    assert 0x1000 in diffs["missing"]
 
 
 def test_export_report(tmp_path):

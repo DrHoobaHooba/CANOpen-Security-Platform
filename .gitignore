@@ -26,6 +26,7 @@ wheels/
 
 # Virtual environments
 .venv/
+.venv*/
 venv/
 ENV/
 env/
@@ -76,11 +77,11 @@ reports/
 crash_reports/
 
 # CANopen OD files (potentially sensitive/proprietary device data)
-od_files/
-object_dictionary/
-object_dictionaries/
-od/
-eds/
+/od_files/
+/object_dictionary/
+/object_dictionaries/
+/od/
+/eds/
 
 # Temporary files
 *.tmp

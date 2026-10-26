@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Optional, Tuple
 
+import can
 import canopen
 
 from ..utils.logging_utils import configure_logging, get_logger, enable_debug
@@ -110,12 +111,12 @@ def main() -> int:
     # Enumerate command
     enum_parser = subparsers.add_parser(
         "enumerate",
-        help="Run full network discovery (passive, SDO, LSS)",
+        help="Discover CANopen nodes passively or with active probes",
     )
     enum_parser.add_argument(
         "--passive-only",
         action="store_true",
-        help="Only run passive discovery",
+        help="Listen using PCAN hardware listen-only mode; send no CAN frames",
     )
     enum_parser.add_argument(
         "--timeout",
@@ -275,16 +276,24 @@ def main() -> int:
 
 def cmd_enumerate(bus: BusInterface, network: canopen.Network, args) -> int:
     """Run network enumeration."""
+    passive_bus = None
     try:
         logger.info("Starting network enumeration")
 
-        network.connect(bustype="pcan", channel=args.channel, bitrate=args.bitrate)
-        enumerator = NodeEnumerator(bus=network.bus, network=network)
-
         if args.passive_only:
-            logger.info("Running passive discovery only")
+            logger.info("Running passive discovery with PCAN listen-only enabled")
+            passive_bus = can.Bus(
+                interface="pcan",
+                channel=args.channel,
+                bitrate=args.bitrate,
+                state=can.BusState.PASSIVE,
+                receive_own_messages=False,
+            )
+            enumerator = NodeEnumerator(bus=passive_bus, network=network)
             nodes = enumerator.discover_passive(timeout=args.timeout)
         else:
+            network.connect(interface="pcan", channel=args.channel, bitrate=args.bitrate)
+            enumerator = NodeEnumerator(bus=network.bus, network=network)
             logger.info("Running full discovery sequence")
             enumerator.discover_all()
             nodes = enumerator.get_discovered_nodes()
@@ -307,10 +316,13 @@ def cmd_enumerate(bus: BusInterface, network: canopen.Network, args) -> int:
         logger.error("Enumeration failed: %s", e, exc_info=args.verbose)
         return 1
     finally:
-        try:
-            network.disconnect()
-        except Exception:
-            pass
+        if passive_bus is not None:
+            passive_bus.shutdown()
+        elif network.bus is not None:
+            try:
+                network.disconnect()
+            except Exception:
+                pass
 
 
 def cmd_od_dump(bus: BusInterface, network: canopen.Network, args) -> int:
