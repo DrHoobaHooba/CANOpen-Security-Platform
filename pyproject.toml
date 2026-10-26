@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "canopen-security-platform"
-version = "0.3.0"
+version = "0.4.0"
 description = "CANopen security platform skeleton"
 authors = ["CANopen Security Team"]
 packages = [

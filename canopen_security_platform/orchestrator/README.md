@@ -302,9 +302,18 @@ reports/
 - **Affected Nodes**: Which devices were vulnerable
 
 ### Monitoring Events
-- **EMCY Events**: Emergency messages with error codes
+
+A live `DeviceMonitor` (a `can.Notifier` attached during fuzzing) classifies
+inbound device frames and feeds the oracle. It is what populates the
+device-anomaly counts:
+
+- **EMCY Events**: Emergency messages with error codes (non-zero code → anomaly)
+- **Unexpected Reboots**: Boot-up frames seen mid-test
+- **NMT State Regressions**: A node dropping out of OPERATIONAL unexpectedly
+- **Liveness Timeouts**: A previously-live node going silent (with recovery tracking)
 - **Heartbeat Anomalies**: Lost heartbeats or state changes
-- **Oracle Alerts**: Rule-triggered anomalies
+- **Oracle Alerts**: Rule-triggered anomalies (`EMCY_Critical`, `Heartbeat_Lost`,
+  `NMT_State_Regression`, `Unexpected_Reboot`)
 
 ## Error Handling
 

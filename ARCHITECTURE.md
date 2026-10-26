@@ -324,9 +324,11 @@ SecurityTestSuite (Main Orchestrator)
 │   ├─ _stage_lss_discovery()
 │   ├─ _stage_load_object_dictionaries()
 │   ├─ _stage_hidden_od_scan()
+│   ├─ _start_device_monitor()   → attach can.Notifier before fuzzing
 │   ├─ _stage_sdo_fuzzing()
 │   ├─ _stage_pdo_fuzzing()
 │   ├─ _stage_nmt_fuzzing()
+│   ├─ _stop_device_monitor()    → detach monitor before collecting results
 │   ├─ _stage_collect_oracle_results()
 │   ├─ _stage_generate_reports()
 │   ├─ _cleanup()
@@ -412,8 +414,15 @@ SecurityTestSuite
 │       ├─ __init__()      → Initialize oracle
 │       ├─ add_rule()      → Register alert rule
 │       ├─ record_event()  → Log event
+│       ├─ on_state_regression() → Record unexpected NMT regression
 │       ├─ get_alerts()    → Get triggered alerts
 │       └─ get_all_events() → Get event history
+│
+├──► monitoring/device_monitor.py
+│    └─ DeviceMonitor (can.Notifier)
+│       ├─ start()/stop()  → Attach/detach live bus listener
+│       ├─ classify EMCY/heartbeat/boot-up → oracle
+│       └─ state-regression + liveness-timeout watchdog
 │
 └──► utils/logging_utils.py
      └─ get_logger()

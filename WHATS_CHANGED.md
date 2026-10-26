@@ -1,6 +1,84 @@
-# Recent Updates - April 14, 2026 (v0.3.0 - Reporting Pipeline Fix)
+# Recent Updates - October 26, 2026 (v0.4.0 - Live Oracle & Device Monitoring)
 
 > **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.
+
+## v0.4.0 Release Notes — October 26, 2026
+
+**Release Type**: Minor — Oracle Event Wiring, Live Device Monitoring, Log Hygiene
+**Focus**: Make "fuzz events" and "device anomalies" in reports reflect reality
+**Validated**: `178 passed` test suite; new `tests/test_monitoring_device_monitor.py`
+
+### ✅ Fuzzer → Oracle Event Wiring (fixes "0 fuzz events")
+
+Previously the SDO, NMT, and concurrent fuzzers stored an `oracle` callback but
+never invoked it, so their transmitted frames were invisible to the oracle and
+every report showed `fuzz_input_events: 0` even though tests ran.
+
+- `fuzzing/sdo_fuzzer.py`: emit a `fuzz_input_sent` oracle event in `_send_sdo_request`.
+- `fuzzing/nmt_fuzzer.py`: added `_notify_oracle()` and wired it into `_send_nmt_command`,
+  `_write_via_sdo`, and every heartbeat-fuzzing send path.
+- `fuzzing/concurrent_fuzzer.py`: added `_notify_oracle()` and wired every send site.
+- Result: fuzz-input counts now match the number of frames sent (e.g. SDO 31, NMT 128).
+
+### ✅ Live Device-Response Monitor (fixes "0 device anomalies")
+
+Nothing was feeding live bus responses to the oracle, so `device_anomalies` was
+always `0`. The old `monitoring/event_handlers.py` relied on a `canopen` callback
+API that does not exist in canopen 2.4.1 and was never started.
+
+- New `monitoring/device_monitor.py` — `DeviceMonitor` attaches a `can.Notifier`
+  to the active bus and classifies inbound CANopen frames:
+  - EMCY with a non-zero error code → `device_anomaly_detected` (code `0x0000` reset → observed).
+  - Unexpected boot-up (heartbeat state `0x00`) → reboot anomaly.
+  - Heartbeat → observed event.
+- **NMT state-regression detection**: a node dropping out of OPERATIONAL to
+  STOPPED/PRE-OPERATIONAL raises a `state_regression` anomaly.
+- **Liveness watchdog**: learns each node's heartbeat interval and raises a
+  `timeout` anomaly if a previously-live node goes silent; node resuming heartbeats
+  is logged as a recovery and re-arms the watchdog.
+- Wired into the orchestrator: started before fuzzing, stopped before results
+  collection and on cleanup. The monitoring summary now prints frame counts,
+  state regressions, timeouts, and recoveries.
+- The bus is listened to with `receive_own_messages` disabled, so the fuzzer's own
+  spoofed EMCY/heartbeat frames are not mistaken for genuine device responses.
+
+### ✅ Effective Alert Rules
+
+The two default alert rules never fired (they checked a `severity` field that
+EMCY events don't carry and a string heartbeat state that is actually an int).
+
+- `EMCY_Critical` now fires on any non-zero EMCY error code.
+- `Heartbeat_Lost` now fires on the watchdog's `timeout` event.
+- Added `NMT_State_Regression` and `Unexpected_Reboot` rules.
+- New oracle hook `Oracle.on_state_regression()` records the regression anomaly.
+
+### ✅ Quieter TX-Queue Backpressure (flood/burst fuzzing)
+
+"Failed to send: The transmit queue is full" during SYNC-burst / PDO-flood tests
+is expected host-side backpressure, not a device fault — but it was logged as a
+per-frame `ERROR`/`WARNING` flood.
+
+- `hal/bus_pcan.py`: added `CANTransmitQueueFullError` (subclass of
+  `CANTransmitError`); queue-full is now logged at `DEBUG`, real errors still `ERROR`.
+- `fuzzing/resource_fuzzer.py`: `fuzz_sync_burst()` / `fuzz_pdo_buffer_flood()`
+  back off briefly on backpressure and emit a single summary line
+  (`N frames sent, M deferred on TX-queue backpressure`) instead of per-frame noise.
+
+### ✅ Discovery / Config / Packaging
+
+- `cli/main.py`: `enumerate --passive-only` now opens PCAN in listen-only
+  (`BusState.PASSIVE`) mode and transmits no frames.
+- `od/` package tracked in VCS (`eds_loader`, `hidden_scanner`, `runtime_od`,
+  `xdd_converter`); `.gitignore` OD-file ignores anchored to repo root and `.venv*/` added.
+- `orchestrator/config.yaml`: fuzzing `target_nodes` set to `[10]`.
+
+### ✅ Validation
+
+- Added `tests/test_monitoring_device_monitor.py` (classification, state-regression,
+  liveness timeout/recovery, backpressure handling) and `tests/test_cli_passive.py`.
+- Full suite: `178 passed`.
+
+---
 
 ## v0.3.0 Release Notes — April 14, 2026
 

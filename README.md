@@ -72,7 +72,7 @@ The platform is organized into functional layers:
 - **Discovery**: Passive, SDO, and LSS scanning
 - **OD**: Object dictionary loading, XDD conversion, hidden scanning
 - **Fuzzing**: Modular fuzzers for SDO, PDO, NMT, LSS
-- **Monitoring**: Event tracking and oracle callbacks
+- **Monitoring**: Oracle event tracking plus a live `can.Notifier`-based device-response monitor (EMCY/heartbeat/boot-up classification, NMT state-regression and liveness-timeout detection)
 - **Orchestrator**: Full 12-stage automated security test suite
 - **CLI**: Command-line entry point with argparse
 - **Utils**: Shared logging and frame utilities
@@ -454,20 +454,37 @@ oracle.add_alert_rule(rule)
 - Node summaries and statistics
 - Exportable reports with recent events and triggered alerts
 
-#### **event_handlers.py** - CAN callback integration
+#### **device_monitor.py** - Live device-response monitoring (anomaly source)
 
 ```python
-from canopen_security_platform.monitoring.event_handlers import EventHandlers
+from canopen_security_platform.monitoring.device_monitor import DeviceMonitor
 
-handlers = EventHandlers(oracle=oracle, async_mode=True)
-handlers.attach(network)
+monitor = DeviceMonitor(oracle, raw_bus)   # raw python-can bus
+monitor.start()                            # attaches a can.Notifier
+# ... run fuzzing ...
+monitor.stop()
+print(monitor.stats)   # frames_seen, emcy/heartbeat/bootup, state_regressions, timeouts
 ```
 
-*Features added:*
-- EMCY, heartbeat, and SYNC callbacks
-- Asynchronous processing via background queue/thread
-- Detailed frame parsing and error handling
-- Stop method for clean shutdown
+This is what makes **device anomalies** appear in reports. A `can.Notifier`
+classifies inbound CANopen frames and feeds the oracle:
+
+- EMCY with a non-zero error code → device anomaly (code `0x0000` reset → observed)
+- Unexpected boot-up (heartbeat state `0x00`) → reboot anomaly
+- **NMT state-regression**: a node leaving OPERATIONAL unexpectedly → anomaly
+- **Liveness watchdog**: a previously-live node going silent → timeout anomaly
+  (recovery re-arms it)
+
+The orchestrator starts it before fuzzing and stops it before results collection.
+It listens with `receive_own_messages` disabled so the fuzzer's own spoofed
+EMCY/heartbeat frames are not counted as device responses.
+
+#### **event_handlers.py** - Legacy CAN callback integration (superseded)
+
+> **Note:** `event_handlers.py` targets a `canopen` callback API that is not
+> available in canopen 2.4.1 and is **not wired into the orchestrator**. Live
+> monitoring is handled by `device_monitor.py` above. This module is kept for
+> reference only.
 
 ---
 
