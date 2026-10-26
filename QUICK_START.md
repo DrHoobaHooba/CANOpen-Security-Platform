@@ -247,13 +247,22 @@ Stage 4: Active Discovery     ~15 seconds (3s per node)
 Stage 5: LSS Discovery        ~10 seconds
 Stage 6: OD Loading           ~5 seconds
 Stage 7: Hidden Scanning      ~60 seconds (most time-intensive)
+                              >> device monitor starts (runs through Stage 17)
 Stage 8: SDO Fuzzing          ~40 seconds
 Stage 9: PDO Fuzzing          ~30 seconds
 Stage 10: NMT Fuzzing         ~20 seconds
-Stage 11: Oracle Results      ~2 seconds
-Stage 12: Report Generation   ~2 seconds
+Stage 11: EMCY Fuzzing        ~20 seconds
+Stage 12: SYNC Fuzzing        ~15 seconds
+Stage 13: Concurrent Fuzzing  ~20 seconds
+Stage 14: CAN ID Fuzzing      ~15 seconds
+Stage 15: Timing Fuzzing      ~20 seconds
+Stage 16: Resource Fuzzing    ~15 seconds
+Stage 17: State Machine Fuzz  ~15 seconds
+                              >> device monitor stops
+Stage 18: Monitoring Results  ~2 seconds
+Stage 19: Report Generation   ~2 seconds
 ─────────────────────────────────────
-TOTAL:                        ~200 seconds (~3.3 minutes)
+TOTAL:                        ~320 seconds (~5.3 minutes)
 ```
 
 To speed up:

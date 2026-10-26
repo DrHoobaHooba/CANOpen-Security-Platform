@@ -10,7 +10,7 @@
 
 ## What is the Full Suite Orchestrator?
 
-The **Full Suite Orchestrator** (`run_full_security_suite.py`) is a unified script that automatically executes **all 12 security test stages** in sequence:
+The **Full Suite Orchestrator** (`run_full_security_suite.py`) is a unified script that automatically executes **all 19 security test stages** in sequence:
 
 1. PCAN Bus Connection
 2. Initialize Monitoring  
@@ -19,11 +19,20 @@ The **Full Suite Orchestrator** (`run_full_security_suite.py`) is a unified scri
 5. LSS Discovery (unconfigured nodes)
 6. Object Dictionary Loading (EDS/XDD/XDC)
 7. Hidden Object Scanning (undocumented OD indices)
+   *(live device monitor starts here and runs through Stage 17)*
 8. SDO Fuzzing (protocol robustness)
 9. PDO Fuzzing (optional, disabled by default)
 10. NMT Fuzzing (state machine resilience)
-11. Monitoring Results Collection (EMCY/heartbeat analysis)
-12. Report Generation (HTML + JSON)
+11. EMCY Fuzzing (emergency codes, recovery scenarios)
+12. SYNC Fuzzing (counter overflow, bursts, jitter)
+13. Concurrent Fuzzing (race conditions / interleaving)
+14. CAN ID Fuzzing (COB-ID boundary, reserved IDs, conflicts)
+15. Timing & Delay Attack Fuzzing
+16. Resource Exhaustion Fuzzing
+17. State Machine Escape Sequences
+    *(live device monitor stops here)*
+18. Monitoring Results Collection (EMCY/heartbeat/device-monitor analysis)
+19. Report Generation (HTML + JSON)
 
 ---
 
@@ -340,4 +349,4 @@ For more information:
 
 **Status:** ✅ Verified for lab research workflows  
 **Last Tested:** 2026-03-03  
-**Test Result:** All 12 stages pass with PCAN hardware
+**Test Result:** All 19 stages pass with PCAN hardware

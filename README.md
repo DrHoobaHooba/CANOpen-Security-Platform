@@ -54,7 +54,7 @@ Licensed under the **Apache License 2.0** - see [LICENSE](LICENSE) for full term
 # Install
 pip install -e .
 
-# Run full automated test suite (all 12 stages)
+# Run full automated test suite (all 19 stages)
 python -m canopen_security_platform.orchestrator.run_full_security_suite
 
 # Or run individual operations
@@ -73,7 +73,7 @@ The platform is organized into functional layers:
 - **OD**: Object dictionary loading, XDD conversion, hidden scanning
 - **Fuzzing**: Modular fuzzers for SDO, PDO, NMT, LSS
 - **Monitoring**: Oracle event tracking plus a live `can.Notifier`-based device-response monitor (EMCY/heartbeat/boot-up classification, NMT state-regression and liveness-timeout detection)
-- **Orchestrator**: Full 12-stage automated security test suite
+- **Orchestrator**: Full 19-stage automated security test suite
 - **CLI**: Command-line entry point with argparse
 - **Utils**: Shared logging and frame utilities
 

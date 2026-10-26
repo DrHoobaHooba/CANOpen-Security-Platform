@@ -73,6 +73,11 @@
                   │    │   └─ Find undocumented objects
                   │    └─ Update TestResults.hidden_objects
                   │
+                  ├──► START DEVICE MONITOR (live anomaly source)
+                  │    └─ Attach can.Notifier before fuzzing begins
+                  │       (EMCY/heartbeat/boot-up classification,
+                  │        NMT state-regression + liveness watchdog)
+                  │
                   ├──► STAGE 8: SDO Fuzzing
                   │    │
                   │    ├─ For each target node:
@@ -108,15 +113,40 @@
                   │    │   └─ Record results
                   │    └─ Update TestResults.nmt_fuzzing_results
                   │
-                  ├──► STAGE 11: Monitoring Results
+                  ├──► STAGE 11: EMCY Fuzzing
+                  │    └─ Emergency codes, state transitions, recovery scenarios
+                  │
+                  ├──► STAGE 12: SYNC Fuzzing
+                  │    └─ Counter overflow, bursts, jitter
+                  │
+                  ├──► STAGE 13: Concurrent Fuzzing
+                  │    └─ Race conditions / interleaving (PDO/SDO/NMT/SYNC)
+                  │
+                  ├──► STAGE 14: CAN ID Fuzzing
+                  │    └─ COB-ID boundary, reserved IDs, conflicts
+                  │
+                  ├──► STAGE 15: Timing & Delay Attack Fuzzing
+                  │    └─ Inter-frame gaps, jitter, clock drift
+                  │
+                  ├──► STAGE 16: Resource Exhaustion Fuzzing
+                  │    └─ Buffer flood / SYNC burst (TX-queue backpressure handled)
+                  │
+                  ├──► STAGE 17: State Machine Escape Sequences
+                  │    └─ Illegal NMT transitions and state corruption
+                  │
+                  ├──► STOP DEVICE MONITOR
+                  │    └─ Detach can.Notifier before collecting results
+                  │
+                  ├──► STAGE 18: Monitoring Results
                   │    │
                   │    ├─ Query Oracle for alerts
                   │    ├─ Extract EMCY events
                   │    ├─ Extract heartbeat anomalies
-                  │    ├─ Categorize by severity
+                  │    ├─ Summarize device-monitor stats
+                  │    │   (state regressions, liveness timeouts, recoveries)
                   │    └─ Update TestResults monitoring fields
                   │
-                  ├──► STAGE 12: Report Generation
+                  ├──► STAGE 19: Report Generation
                   │    │
                   │    ├─ Create reports/ directory
                   │    ├─ Export JSON results
@@ -444,14 +474,23 @@ Time    Action                                  Duration  Cumulative
 00:32   Stage 5 - LSS Discovery                 10s            32s
 00:37   Stage 6 - OD Loading                     5s            37s
 01:37   Stage 7 - Hidden Scanning              60s            97s
+  ·     >> Device monitor started (runs through Stage 17)
 02:17   Stage 8 - SDO Fuzzing                  40s           137s
 02:47   Stage 9 - PDO Fuzzing                  30s           167s
 03:07   Stage 10 - NMT Fuzzing                 20s           187s
-03:09   Stage 11 - Monitoring Results           2s           189s
-03:11   Stage 12 - Report Generation            2s           191s
-03:12   Final Summary                           1s           192s
+03:27   Stage 11 - EMCY Fuzzing                20s           207s
+03:42   Stage 12 - SYNC Fuzzing                15s           222s
+04:02   Stage 13 - Concurrent Fuzzing          20s           242s
+04:17   Stage 14 - CAN ID Fuzzing              15s           257s
+04:37   Stage 15 - Timing Fuzzing              20s           277s
+04:52   Stage 16 - Resource Fuzzing            15s           292s
+05:07   Stage 17 - State Machine Fuzzing       15s           307s
+  ·     >> Device monitor stopped
+05:09   Stage 18 - Monitoring Results           2s           309s
+05:11   Stage 19 - Report Generation            2s           311s
+05:12   Final Summary                           1s           312s
 ────────────────────────────────────────────────────────────────────
-Total                                                        192s (~3.2 min)
+Total                                                        ~312s (~5.2 min)
 ```
 
 ---

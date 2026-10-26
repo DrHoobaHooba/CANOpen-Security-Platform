@@ -17,7 +17,7 @@ The **Full Automation Suite** is a unified orchestrator that runs the entire CAN
 
 ## Test Stages
 
-The orchestrator runs 12 stages in sequence:
+The orchestrator runs 19 stages in sequence:
 
 ```
 STAGE 1:  PCAN Bus Connection          → Establish CAN interface
@@ -27,11 +27,20 @@ STAGE 4:  Active SDO Discovery         → Probe nodes for device identification
 STAGE 5:  LSS Discovery                → Scan for unconfigured nodes
 STAGE 6:  Object Dictionary Loading    → Load and convert EDS/XDD/XDC files
 STAGE 7:  Hidden Object Scanning       → Brute-force scan for undocumented OD indices
+  >> Device response monitor starts here (runs through STAGE 17)
 STAGE 8:  SDO Fuzzing                  → Test SDO protocol robustness
 STAGE 9:  PDO Fuzzing                  → Test PDO configuration/transmission
 STAGE 10: NMT Fuzzing                  → Test NMT state machine
-STAGE 11: Monitoring Results           → Collect EMCY, heartbeat, and anomaly data
-STAGE 12: Report Generation            → Create HTML and JSON reports
+STAGE 11: EMCY Fuzzing                 → Emergency codes, state transitions, recovery
+STAGE 12: SYNC Fuzzing                 → Counter overflow, bursts, jitter
+STAGE 13: Concurrent Fuzzing           → Race conditions / interleaved traffic
+STAGE 14: CAN ID Fuzzing               → COB-ID boundary, reserved IDs, conflicts
+STAGE 15: Timing & Delay Attack Fuzzing→ Inter-frame gaps, jitter, clock drift
+STAGE 16: Resource Exhaustion Fuzzing  → Buffer/SYNC-burst stress with backpressure
+STAGE 17: State Machine Escape         → Illegal NMT transitions and state corruption
+  >> Device response monitor stops here
+STAGE 18: Monitoring Results           → Collect EMCY, heartbeat, and device-monitor data
+STAGE 19: Report Generation            → Create HTML and JSON reports
 ```
 
 ## File Structure
