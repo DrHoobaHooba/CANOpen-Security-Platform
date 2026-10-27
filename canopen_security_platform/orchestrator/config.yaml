@@ -222,6 +222,10 @@ monitoring:
   heartbeat_timeout_warning: 3.0      # Warn if heartbeat not received in N seconds
   track_state_changes: true           # Track and log NMT state transitions
   anomaly_detection: true             # Enable anomaly detection
+  induced_anomaly_grace_seconds: 1.5  # Grace window after NMT/state-machine stages
+                                      # during which a device anomaly is still
+                                      # attributed to that stage (induced) rather
+                                      # than flagged as spontaneous instability
 
 # Reporting Parameters
 reporting:

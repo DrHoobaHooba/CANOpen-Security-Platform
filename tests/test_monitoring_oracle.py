@@ -1,4 +1,5 @@
 import json
+import time
 
 from canopen_security_platform.monitoring.oracle import Oracle, AlertRule
 
@@ -99,3 +100,80 @@ def test_record_event_classification_alert_for_device_anomaly():
 
     assert len(oracle.get_triggered_alerts()) == 1
     assert oracle.get_triggered_alerts()[0]["rule_name"] == "timeout_any"
+
+
+def test_anomaly_inside_injection_window_is_induced():
+    oracle = Oracle()
+    oracle.begin_injection_window("NMT Fuzzing")
+    oracle.on_state_regression(10, "OPERATIONAL", "STOPPED")
+    oracle.end_injection_window("NMT Fuzzing")
+
+    event = oracle.get_event_log()[-1]
+    assert event["correlation"] == "induced"
+    assert event["correlation_stage"] == "NMT Fuzzing"
+
+
+def test_anomaly_outside_injection_window_is_spontaneous():
+    oracle = Oracle()
+    # No window open at all.
+    oracle.on_reboot(10)
+
+    event = oracle.get_event_log()[-1]
+    assert event["correlation"] == "spontaneous"
+    assert "correlation_stage" not in event
+
+
+def test_anomaly_after_window_but_within_grace_is_induced():
+    oracle = Oracle(induced_anomaly_grace=5.0)
+    oracle.begin_injection_window("State Machine Fuzzing")
+    oracle.end_injection_window("State Machine Fuzzing")
+    # Window just closed; grace of 5s still applies.
+    oracle.on_timeout(10)
+
+    event = oracle.get_event_log()[-1]
+    assert event["correlation"] == "induced"
+    assert event["correlation_stage"] == "State Machine Fuzzing"
+
+
+def test_anomaly_after_grace_expires_is_spontaneous():
+    oracle = Oracle(induced_anomaly_grace=0.0)
+    oracle.begin_injection_window("NMT Fuzzing")
+    oracle.end_injection_window("NMT Fuzzing")
+    time.sleep(0.01)  # past the zero grace period
+    oracle.on_reboot(10)
+
+    event = oracle.get_event_log()[-1]
+    assert event["correlation"] == "spontaneous"
+
+
+def test_record_event_anomaly_is_correlated():
+    oracle = Oracle()
+    oracle.begin_injection_window("NMT Fuzzing")
+    oracle.record_event(
+        {
+            "type": "state_regression",
+            "node_id": 5,
+            "event_classification": "device_anomaly_detected",
+        }
+    )
+    oracle.end_injection_window("NMT Fuzzing")
+
+    event = oracle.get_event_log()[-1]
+    assert event["correlation"] == "induced"
+    assert event["correlation_stage"] == "NMT Fuzzing"
+
+
+def test_fuzz_input_event_not_correlated():
+    oracle = Oracle()
+    oracle.begin_injection_window("NMT Fuzzing")
+    oracle.record_event(
+        {
+            "type": "nmt",
+            "node_id": 5,
+            "event_classification": "fuzz_input_sent",
+        }
+    )
+    oracle.end_injection_window("NMT Fuzzing")
+
+    event = oracle.get_event_log()[-1]
+    assert "correlation" not in event

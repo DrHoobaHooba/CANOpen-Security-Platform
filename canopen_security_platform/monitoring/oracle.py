@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Callable, List, Dict, Optional
+import threading
+from typing import Any, Callable, List, Dict, Optional, Tuple
 import time
 import json
 from pathlib import Path
@@ -52,11 +53,18 @@ class Oracle:
     alert rules for anomaly detection. Can persist events to file/database.
     """
 
-    def __init__(self, persist_dir: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        persist_dir: Optional[str] = None,
+        induced_anomaly_grace: float = 1.5,
+    ) -> None:
         """Initialize oracle.
         
         Args:
             persist_dir: Save events to this directory; None disables persistence
+            induced_anomaly_grace: Seconds after a stage's injection window
+                closes during which a device anomaly is still attributed to
+                that stage (covers the device's delayed reaction).
         """
         self.persist_dir = Path(persist_dir) if persist_dir else None
         if self.persist_dir:
@@ -69,6 +77,64 @@ class Oracle:
         self.alert_rules: List[AlertRule] = []
         self.triggered_alerts: List[Dict[str, Any]] = []
         self.start_time = time.time()
+
+        # Stage-aware correlation: track "injection windows" during which the
+        # suite is deliberately manipulating device state (NMT / state-machine
+        # fuzzing). Device anomalies inside a window (plus a grace period) are
+        # classified as *induced* (expected consequence of our own commands)
+        # rather than *spontaneous* (genuine device instability).
+        self._induced_grace = induced_anomaly_grace
+        self._window_lock = threading.Lock()
+        self._active_windows: Dict[str, Dict[str, Any]] = {}
+        self._closed_windows: List[Dict[str, Any]] = []
+
+    def begin_injection_window(
+        self, stage: str, grace: Optional[float] = None
+    ) -> None:
+        """Mark the start of a stage that deliberately disrupts device state.
+
+        Device anomalies observed while the window is open (or within the
+        grace period after it closes) are classified as ``induced``.
+
+        Args:
+            stage: Human-readable stage name (e.g. ``"NMT Fuzzing"``).
+            grace: Optional override for the post-window grace period (seconds).
+        """
+        with self._window_lock:
+            self._active_windows[stage] = {
+                "stage": stage,
+                "start": time.time(),
+                "end": None,
+                "grace": self._induced_grace if grace is None else grace,
+            }
+        logger.debug("Injection window opened: %s", stage)
+
+    def end_injection_window(self, stage: str) -> None:
+        """Mark the end of a state-disrupting stage's injection window."""
+        with self._window_lock:
+            window = self._active_windows.pop(stage, None)
+            if window is not None:
+                window["end"] = time.time()
+                self._closed_windows.append(window)
+        if window is not None:
+            logger.debug("Injection window closed: %s", stage)
+
+    def _classify_correlation(self, timestamp: float) -> Tuple[str, Optional[str]]:
+        """Classify a device-anomaly timestamp as induced or spontaneous.
+
+        Returns:
+            Tuple of (``"induced"`` or ``"spontaneous"``, originating stage name
+            or ``None``).
+        """
+        with self._window_lock:
+            for window in self._active_windows.values():
+                if timestamp >= window["start"]:
+                    return "induced", window["stage"]
+            for window in self._closed_windows:
+                end = window["end"] if window["end"] is not None else window["start"]
+                if window["start"] <= timestamp <= end + window["grace"]:
+                    return "induced", window["stage"]
+        return "spontaneous", None
 
     def add_alert_rule(self, rule: AlertRule) -> None:
         """Register an alert rule."""
@@ -233,15 +299,30 @@ class Oracle:
         }
         
         self._record_event(event)
-        self.node_states.setdefault(node_id, {})["reboots"] = (
-            self.node_states[node_id].get("reboots", 0) + 1
-        )
+        node_state = self.node_states.setdefault(node_id, {})
+        node_state["reboots"] = node_state.get("reboots", 0) + 1
         
         logger.warning("Reboot detected on node %d", node_id)
         self._check_alert_rules(event)
 
     def _record_event(self, event: Dict[str, Any]) -> None:
         """Record event in memory and optionally persist."""
+        # Stage-aware correlation: tag device anomalies as induced vs
+        # spontaneous based on whether a state-disrupting injection window was
+        # active when the anomaly occurred. Done here (the single choke point
+        # for every event type) so on_emcy/on_reboot/on_state_regression/
+        # on_timeout and external record_event() all get tagged consistently.
+        if (
+            event.get("event_classification") == "device_anomaly_detected"
+            and "correlation" not in event
+        ):
+            correlation, stage = self._classify_correlation(
+                event.get("timestamp", time.time())
+            )
+            event["correlation"] = correlation
+            if stage is not None:
+                event["correlation_stage"] = stage
+
         self.events.append(event)
         
         # Persist if enabled

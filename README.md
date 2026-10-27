@@ -479,6 +479,27 @@ The orchestrator starts it before fuzzing and stops it before results collection
 It listens with `receive_own_messages` disabled so the fuzzer's own spoofed
 EMCY/heartbeat frames are not counted as device responses.
 
+**Induced vs spontaneous anomalies.** Because the monitor runs across *every*
+fuzzing stage, some anomalies are the device's expected reaction to stages that
+deliberately drive state changes (NMT fuzzing, state-machine escape sequences),
+while others happen spontaneously under unrelated load. The oracle tags each
+device anomaly accordingly:
+
+- The orchestrator opens an **injection window** around Stage 10 (NMT) and
+  Stage 17 (State Machine) via `oracle.begin_injection_window()` /
+  `end_injection_window()`.
+- Any `device_anomaly_detected` event whose timestamp falls inside a window
+  (plus a configurable grace period, `monitoring.induced_anomaly_grace_seconds`,
+  default `1.5s`, to catch the device's delayed reaction) is tagged
+  `correlation: "induced"` with the originating `correlation_stage`.
+- Everything else is tagged `correlation: "spontaneous"` — genuine instability
+  worth investigating first.
+
+The HTML/JSON report and console summary break the total down into induced vs
+spontaneous counts and list each anomaly (time, node, type, stage, details), so
+"we told the device to change state" is clearly separated from "the device fell
+over on its own."
+
 #### **event_handlers.py** - Legacy CAN callback integration (superseded)
 
 > **Note:** `event_handlers.py` targets a `canopen` callback API that is not

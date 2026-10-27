@@ -1,3 +1,47 @@
+# Recent Updates - October 27, 2026 (v0.5.0 - Stage-Aware Anomaly Correlation)
+
+> **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.
+
+## v0.5.0 Release Notes — October 27, 2026
+
+**Release Type**: Minor — Induced vs Spontaneous Device-Anomaly Classification
+**Focus**: Distinguish anomalies the suite *caused* (by commanding state changes) from genuine device instability, and surface it in the report
+**Validated**: `184 passed` test suite; new correlation tests in `tests/test_monitoring_oracle.py`
+
+### ✅ Stage-Aware Anomaly Correlation (induced vs spontaneous)
+
+The live device monitor runs across every fuzzing stage, so a device dropping out
+of OPERATIONAL or rebooting during **NMT fuzzing (Stage 10)** or **state-machine
+escape sequences (Stage 17)** is an *expected* reaction to frames we deliberately
+sent — not spontaneous instability. Previously both looked identical in the report
+(e.g. "22 device anomalies" with no context), making it hard to tell real findings
+from self-inflicted noise.
+
+- `monitoring/oracle.py`: added **injection windows** — `begin_injection_window()`
+  / `end_injection_window()` plus `_classify_correlation()`. Every
+  `device_anomaly_detected` event is now tagged `correlation: "induced" |
+  "spontaneous"` (induced events also carry `correlation_stage`). Classification
+  happens in the single `_record_event()` choke point, so monitor-thread and
+  fuzzer-thread events are tagged consistently. A configurable grace period
+  (`monitoring.induced_anomaly_grace_seconds`, default `1.5s`) keeps a device's
+  delayed reaction just after a stage attributed to that stage.
+- `orchestrator/run_full_security_suite.py`: opens an injection window around the
+  NMT and state-machine stages (closed in a `finally` so it always ends); the
+  monitoring-results stage splits anomalies and alerts into induced vs spontaneous.
+- **Reporting**: the console summary, JSON (`monitoring.induced_anomaly_events` /
+  `spontaneous_anomaly_events`), and HTML report now show the induced/spontaneous
+  breakdown, an explanatory note, and detail tables (time, node, type, stage,
+  details) so spontaneous anomalies — the genuine findings — stand out.
+
+### 🐛 Fixed: `on_reboot` KeyError on a node's first reboot
+
+`Oracle.on_reboot()` evaluated `self.node_states[node_id]` on the assignment RHS
+before the left-hand `setdefault` created the key, raising `KeyError` when a
+reboot was the first event seen for a node. Rewritten to fetch the node-state dict
+once, then update it.
+
+---
+
 # Recent Updates - October 26, 2026 (v0.4.0 - Live Oracle & Device Monitoring)
 
 > **⚠️ DISCLAIMER**: This project was developed with AI assistance and is intended for research/educational purposes only. See [README.md](README.md) for full safety warnings and disclaimer.

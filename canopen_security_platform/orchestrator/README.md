@@ -324,6 +324,23 @@ device-anomaly counts:
 - **Oracle Alerts**: Rule-triggered anomalies (`EMCY_Critical`, `Heartbeat_Lost`,
   `NMT_State_Regression`, `Unexpected_Reboot`)
 
+#### Induced vs Spontaneous Anomalies
+
+Because the monitor runs across all fuzzing stages, each device anomaly is
+classified by *why* it probably happened:
+
+- **Induced** — occurred while the suite was deliberately driving state changes
+  (Stage 10 NMT Fuzzing, Stage 17 State Machine Fuzzing). The orchestrator opens
+  an "injection window" around those stages; anomalies inside the window (plus a
+  configurable grace period, `monitoring.induced_anomaly_grace_seconds`, default
+  `1.5s`) are expected reactions to our own commands.
+- **Spontaneous** — occurred outside those windows and indicate genuine device
+  instability. These are the findings to review first.
+
+The console summary, JSON (`monitoring.induced_anomaly_events` /
+`spontaneous_anomaly_events`), and HTML report all show the induced/spontaneous
+split plus a per-anomaly detail table (time, node, type, stage, details).
+
 ## Error Handling
 
 The suite handles errors gracefully:

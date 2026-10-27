@@ -100,6 +100,11 @@ class TestResults:
     oracle_alerts: List[Dict[str, Any]] = field(default_factory=list)
     fuzz_input_events: List[Dict[str, Any]] = field(default_factory=list)
     device_anomaly_events: List[Dict[str, Any]] = field(default_factory=list)
+    # Device anomalies split by stage-aware correlation. Induced = occurred
+    # while a state-disrupting fuzz stage (NMT / state machine) was active, so
+    # the device reaction was expected. Spontaneous = genuine instability.
+    induced_anomaly_events: List[Dict[str, Any]] = field(default_factory=list)
+    spontaneous_anomaly_events: List[Dict[str, Any]] = field(default_factory=list)
     
     # Issues and warnings
     warnings: List[str] = field(default_factory=list)
@@ -255,6 +260,8 @@ class SecurityTestSuite:
             'monitoring': {
                 'fuzz_input_events': self.results.fuzz_input_events,
                 'device_anomaly_events': self.results.device_anomaly_events,
+                'induced_anomaly_events': self.results.induced_anomaly_events,
+                'spontaneous_anomaly_events': self.results.spontaneous_anomaly_events,
                 'emcy_events': self.results.emcy_events,
                 'heartbeat_anomalies': self.results.heartbeat_anomalies,
                 'oracle_alerts': self.results.oracle_alerts,
@@ -335,6 +342,10 @@ class SecurityTestSuite:
                 'heartbeat_timeout_warning': 3.0,
                 'track_state_changes': True,
                 'anomaly_detection': True,
+                # Seconds after a state-disrupting stage (NMT / state machine)
+                # during which a device anomaly is still attributed to that
+                # stage (induced) rather than flagged as spontaneous instability.
+                'induced_anomaly_grace_seconds': 1.5,
             },
             'reporting': {
                 'output_dir': 'reports',
@@ -409,7 +420,12 @@ class SecurityTestSuite:
             print(f"ℹ  Fuzz Inputs Sent (expected): {len(self.results.fuzz_input_events)}")
 
         if self.results.device_anomaly_events:
-            print(f"⚠  Device Anomaly Events (reportable issues): {len(self.results.device_anomaly_events)}")
+            induced = len(self.results.induced_anomaly_events)
+            spontaneous = len(self.results.spontaneous_anomaly_events)
+            print(f"⚠  Device Anomaly Events: {len(self.results.device_anomaly_events)} "
+                  f"(induced: {induced}, spontaneous: {spontaneous})")
+            if spontaneous:
+                print(f"     → {spontaneous} spontaneous (genuine instability) — review first")
         
         if self.results.warnings:
             print(f"\n⚠  Warnings: {len(self.results.warnings)}")
@@ -662,7 +678,11 @@ class SecurityTestSuite:
         self._print_stage_header("STAGE 2: Initialize Monitoring", "Setting up anomaly detection and event tracking")
         
         try:
-            self.oracle = Oracle()
+            self.oracle = Oracle(
+                induced_anomaly_grace=self.config['monitoring'].get(
+                    'induced_anomaly_grace_seconds', 1.5
+                )
+            )
             
             # Add standard alert rules
             if self.config['monitoring'].get('anomaly_detection', True):
@@ -1196,7 +1216,13 @@ class SecurityTestSuite:
             print(f"Target nodes: {sorted(target_nodes)}")
             print("⚠  WARNING: NMT fuzzing will change node states")
             print()
-            
+
+            # This stage deliberately drives NMT state transitions, so device
+            # state regressions/reboots observed here are expected (induced),
+            # not spontaneous instability. Mark the window for correlation.
+            if self.oracle:
+                self.oracle.begin_injection_window("NMT Fuzzing")
+
             # Create oracle callback
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
@@ -1253,6 +1279,9 @@ class SecurityTestSuite:
         except Exception as e:
             self.results.mark_stage_failed("NMT Fuzzing", str(e))
             logger.exception("NMT fuzzing failed")
+        finally:
+            if self.oracle:
+                self.oracle.end_injection_window("NMT Fuzzing")
     
     def _stage_emcy_fuzzing(self) -> None:
         """Stage 11: EMCY (Emergency) message fuzzing (NEW - Tier 1)."""
@@ -1718,7 +1747,12 @@ class SecurityTestSuite:
             print(f"Target nodes: {sorted(target_nodes)}")
             print("Testing state machine: illegal transitions, guard time abuse, and reset surges...")
             print()
-            
+
+            # Deliberately drives illegal state transitions / resets, so device
+            # regressions and reboots here are expected (induced).
+            if self.oracle:
+                self.oracle.begin_injection_window("State Machine Fuzzing")
+
             fuzz_inputs: List[Dict[str, Any]] = []
             device_anomalies: List[Dict[str, Any]] = []
             
@@ -1769,6 +1803,9 @@ class SecurityTestSuite:
         except Exception as e:
             self.results.mark_stage_failed("State Machine Fuzzing", str(e))
             logger.exception("State machine fuzzing failed")
+        finally:
+            if self.oracle:
+                self.oracle.end_injection_window("State Machine Fuzzing")
     
     def _stage_collect_oracle_results(self) -> None:
         """Stage 18: Collect and summarize oracle monitoring results."""
@@ -1786,6 +1823,8 @@ class SecurityTestSuite:
             # Reset categorized buckets before collecting.
             self.results.fuzz_input_events = []
             self.results.device_anomaly_events = []
+            self.results.induced_anomaly_events = []
+            self.results.spontaneous_anomaly_events = []
 
             # Categorize events
             for event in self.oracle.get_event_log():
@@ -1796,19 +1835,44 @@ class SecurityTestSuite:
                     self.results.fuzz_input_events.append(event)
                 elif classification == 'device_anomaly_detected':
                     self.results.device_anomaly_events.append(event)
+                    # Stage-aware split: induced (expected reaction to a
+                    # state-disrupting stage) vs spontaneous (genuine instability).
+                    if event.get('correlation') == 'induced':
+                        self.results.induced_anomaly_events.append(event)
+                    else:
+                        self.results.spontaneous_anomaly_events.append(event)
                 
                 if event_type == 'emcy':
                     self.results.emcy_events.append(event)
                 elif event_type == 'heartbeat':
                     if classification == 'device_anomaly_detected' or event.get('anomaly', False):
                         self.results.heartbeat_anomalies.append(event)
-            
+
+            induced = len(self.results.induced_anomaly_events)
+            spontaneous = len(self.results.spontaneous_anomaly_events)
+            induced_alerts = sum(
+                1 for a in alerts
+                if a.get('event', {}).get('correlation') == 'induced'
+            )
+            spontaneous_alerts = len(alerts) - induced_alerts
+
             print(f"Oracle Events:")
             print(f"  • Fuzz Inputs (expected): {len(self.results.fuzz_input_events)}")
-            print(f"  • Device Anomalies (issues): {len(self.results.device_anomaly_events)}")
-            print(f"  • Total Alerts: {len(alerts)}")
+            print(f"  • Device Anomalies (total): {len(self.results.device_anomaly_events)}")
+            print(f"      - Induced (expected reaction to NMT/state fuzzing): {induced}")
+            print(f"      - Spontaneous (genuine instability): {spontaneous}")
+            print(f"  • Total Alerts: {len(alerts)} "
+                  f"(induced: {induced_alerts}, spontaneous: {spontaneous_alerts})")
             print(f"  • EMCY Events: {len(self.results.emcy_events)}")
             print(f"  • Heartbeat Anomalies: {len(self.results.heartbeat_anomalies)}")
+
+            if spontaneous:
+                print()
+                print(f"⚠  {spontaneous} SPONTANEOUS device anomaly(ies) — review these first:")
+                for event in self.results.spontaneous_anomaly_events[:10]:
+                    print(f"    [{event.get('type', 'unknown')}] "
+                          f"node {event.get('node_id', '?')} "
+                          f"at {event.get('timestamp', '?')}")
 
             if self._device_monitor_stats:
                 dm = self._device_monitor_stats
@@ -1838,6 +1902,76 @@ class SecurityTestSuite:
             self.results.mark_stage_failed("Monitoring Collection", str(e))
             logger.exception("Failed to collect oracle results")
     
+    def _format_anomaly_details(self, event: Dict[str, Any]) -> str:
+        """Human-readable description of a device-anomaly event for the report."""
+        etype = event.get('type', 'unknown')
+        if etype == 'state_regression':
+            return f"NMT state {event.get('old_state', '?')} → {event.get('new_state', '?')}"
+        if etype == 'reboot':
+            return "Unexpected boot-up (device reset itself)"
+        if etype == 'timeout':
+            return "Liveness timeout (node stopped sending heartbeats)"
+        if etype == 'emcy':
+            code = event.get('error_code', 0)
+            code_str = f"0x{code:04X}" if isinstance(code, int) else str(code)
+            return f"EMCY error code {code_str}"
+        return etype
+
+    def _build_anomaly_detail_html(self) -> str:
+        """Build detail tables for spontaneous and induced device anomalies."""
+        html = ""
+
+        def _table(events: List[Dict[str, Any]]) -> str:
+            rows = (
+                "<table><tr><th>Time</th><th>Node</th>"
+                "<th>Type</th><th>Stage</th><th>Details</th></tr>"
+            )
+            for event in events:
+                ts = event.get('timestamp')
+                try:
+                    ts_str = datetime.fromtimestamp(float(ts)).strftime('%H:%M:%S')
+                except (TypeError, ValueError):
+                    ts_str = str(ts)
+                node = event.get('node_id', '?')
+                etype = event.get('type', 'unknown')
+                stage = event.get('correlation_stage', '—')
+                details = self._format_anomaly_details(event)
+                rows += (
+                    f"<tr><td>{ts_str}</td><td>{node}</td><td>{etype}</td>"
+                    f"<td>{stage}</td><td>{details}</td></tr>"
+                )
+            rows += "</table>"
+            return rows
+
+        spontaneous = self.results.spontaneous_anomaly_events
+        induced = self.results.induced_anomaly_events
+
+        if spontaneous:
+            html += (
+                f"<h3 class='error'>Spontaneous Device Anomalies ({len(spontaneous)})</h3>"
+                "<p>Occurred outside any NMT/state-machine fuzzing window — "
+                "these indicate genuine device instability and should be "
+                "investigated first.</p>"
+            )
+            html += _table(spontaneous)
+        elif self.results.device_anomaly_events:
+            html += (
+                "<h3 class='success'>No spontaneous device anomalies</h3>"
+                "<p>Every detected device anomaly coincided with deliberate "
+                "NMT/state-machine fuzzing (induced).</p>"
+            )
+
+        if induced:
+            html += (
+                f"<h3 class='warning'>Induced Device Anomalies ({len(induced)})</h3>"
+                "<p>Expected reactions to deliberate NMT/state-machine fuzzing "
+                "(Stages 10 &amp; 17) — the suite commanded these state changes "
+                "or resets.</p>"
+            )
+            html += _table(induced)
+
+        return html
+
     def _stage_generate_reports(self) -> None:
         """Stage 19: Generate HTML and JSON reports."""
         self._print_stage_header("STAGE 19: Report Generation", "Creating comprehensive test reports")
@@ -2037,8 +2171,16 @@ class SecurityTestSuite:
                 <td>{len(self.results.fuzz_input_events)}</td>
             </tr>
             <tr>
-                <td>Device Anomaly Events</td>
+                <td>Device Anomaly Events (total)</td>
                 <td class="{'error' if len(self.results.device_anomaly_events) > 0 else 'success'}">{len(self.results.device_anomaly_events)}</td>
+            </tr>
+            <tr>
+                <td>&nbsp;&nbsp;↳ Induced (expected reaction to NMT/state-machine fuzzing)</td>
+                <td class="{'warning' if len(self.results.induced_anomaly_events) > 0 else 'success'}">{len(self.results.induced_anomaly_events)}</td>
+            </tr>
+            <tr>
+                <td>&nbsp;&nbsp;↳ Spontaneous (genuine device instability)</td>
+                <td class="{'error' if len(self.results.spontaneous_anomaly_events) > 0 else 'success'}">{len(self.results.spontaneous_anomaly_events)}</td>
             </tr>
             <tr>
                 <td>EMCY Events</td>
@@ -2053,7 +2195,21 @@ class SecurityTestSuite:
                 <td class="{'warning' if len(self.results.oracle_alerts) > 0 else 'success'}">{len(self.results.oracle_alerts)}</td>
             </tr>
         </table>
-        
+        <p style="background:#f4f4f4;border-left:4px solid #888;padding:8px 12px;">
+            <strong>Induced vs spontaneous device anomalies.</strong>
+            A live device-response monitor runs during all fuzzing stages and
+            flags state regressions, unexpected reboots and liveness timeouts.
+            <em>Induced</em> anomalies occurred while the suite was deliberately
+            driving NMT/state-machine transitions (Stages 10 &amp; 17), so the
+            device's reaction is expected. <em>Spontaneous</em> anomalies
+            occurred outside those windows and indicate genuine instability —
+            review these first.
+        </p>
+"""
+
+        html += self._build_anomaly_detail_html()
+
+        html += """
         <h2>Issues and Warnings</h2>
 """
         
