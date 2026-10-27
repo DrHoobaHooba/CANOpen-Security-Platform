@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="canopen_security_platform",
-    version="0.3.0",
+    version="0.5.0",
     description="CANopen security platform skeleton",
     packages=find_packages(),
     python_requires=">=3.10",

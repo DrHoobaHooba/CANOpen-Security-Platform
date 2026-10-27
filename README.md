@@ -2,7 +2,7 @@
 
 A modular Python framework for CANopen security research and fuzzing on Windows + PCAN hardware.
 
-Current release: v0.3.0
+Current release: v0.5.0
 
 ---
 
